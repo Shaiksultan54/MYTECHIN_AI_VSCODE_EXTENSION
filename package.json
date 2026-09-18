@@ -1,0 +1,447 @@
+{
+  "name": "mytechin-ai",
+  "displayName": "Mytechin AI",
+  "description": "Local-first, project-aware AI coding agent for VS Code. Bring your own provider: Ollama, Puter, OpenAI, Anthropic, or any OpenAI-compatible endpoint.",
+  "version": "0.1.0",
+  "publisher": "mytechin",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "ollama",
+    "local",
+    "coding assistant"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mytechin/mytechin-ai"
+  },
+  "icon": "media/icon.png",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mytechin",
+          "title": "Mytechin AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mytechin": [
+        {
+          "id": "mytechin.chat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "mytechin.open",
+        "title": "Open",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.newChat",
+        "title": "New Chat",
+        "category": "Mytechin AI",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mytechin.ask",
+        "title": "Ask",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.explainSelection",
+        "title": "Explain Selection",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.fixSelection",
+        "title": "Fix Selection",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.refactorSelection",
+        "title": "Refactor Selection",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.generateTests",
+        "title": "Generate Tests",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.reviewFile",
+        "title": "Review File",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.explainFile",
+        "title": "Explain File",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.addSelectionToChat",
+        "title": "Add Selection to Chat",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.addFileToChat",
+        "title": "Add File to Chat",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.addFolderToChat",
+        "title": "Add Folder to Chat",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.configureProvider",
+        "title": "Configure Provider",
+        "category": "Mytechin AI",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "mytechin.stopAgent",
+        "title": "Stop Agent",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.showContext",
+        "title": "Show Context",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.showHistory",
+        "title": "Show History",
+        "category": "Mytechin AI",
+        "icon": "$(history)"
+      },
+      {
+        "command": "mytechin.showLogs",
+        "title": "Show Logs",
+        "category": "Mytechin AI"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mytechin.newChat",
+          "when": "view == mytechin.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mytechin.showHistory",
+          "when": "view == mytechin.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mytechin.configureProvider",
+          "when": "view == mytechin.chat",
+          "group": "navigation@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "mytechin.editorSubmenu",
+          "group": "0_mytechin"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "mytechin.explorerSubmenu",
+          "group": "0_mytechin"
+        }
+      ],
+      "mytechin.editorSubmenu": [
+        {
+          "command": "mytechin.explainSelection",
+          "group": "1_ask@1"
+        },
+        {
+          "command": "mytechin.fixSelection",
+          "group": "1_ask@2"
+        },
+        {
+          "command": "mytechin.refactorSelection",
+          "group": "1_ask@3"
+        },
+        {
+          "command": "mytechin.generateTests",
+          "group": "1_ask@4"
+        },
+        {
+          "command": "mytechin.addSelectionToChat",
+          "group": "2_add@1"
+        },
+        {
+          "command": "mytechin.ask",
+          "group": "2_add@2"
+        }
+      ],
+      "mytechin.explorerSubmenu": [
+        {
+          "command": "mytechin.explainFile",
+          "group": "1_ask@1"
+        },
+        {
+          "command": "mytechin.reviewFile",
+          "group": "1_ask@2"
+        },
+        {
+          "command": "mytechin.addFileToChat",
+          "group": "2_add@1"
+        },
+        {
+          "command": "mytechin.addFolderToChat",
+          "group": "2_add@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mytechin.explainSelection",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mytechin.fixSelection",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mytechin.refactorSelection",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mytechin.generateTests",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mytechin.addSelectionToChat",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mytechin.addFolderToChat",
+          "when": "false"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "mytechin.editorSubmenu",
+        "label": "Mytechin AI"
+      },
+      {
+        "id": "mytechin.explorerSubmenu",
+        "label": "Mytechin AI"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "mytechin.open",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "mytechin.addSelectionToChat",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "mytechin.stopAgent",
+        "key": "ctrl+alt+escape",
+        "mac": "cmd+alt+escape",
+        "when": "mytechin.agentRunning"
+      }
+    ],
+    "configuration": {
+      "title": "Mytechin AI",
+      "properties": {
+        "mytechin.provider": {
+          "type": "string",
+          "enum": [
+            "ollama",
+            "puter",
+            "openai",
+            "anthropic",
+            "openai-compatible"
+          ],
+          "default": "ollama",
+          "description": "Active AI provider."
+        },
+        "mytechin.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id for the active provider. Leave empty to pick one in the sidebar."
+        },
+        "mytechin.ollama.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "description": "Base URL of the local Ollama server."
+        },
+        "mytechin.openaiCompatible.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of an OpenAI-compatible endpoint, including /v1."
+        },
+        "mytechin.openaiCompatible.organization": {
+          "type": "string",
+          "default": "",
+          "description": "Optional organization header for OpenAI-compatible endpoints."
+        },
+        "mytechin.puter.baseUrl": {
+          "type": "string",
+          "default": "https://api.puter.com",
+          "description": "Base URL of the Puter API."
+        },
+        "mytechin.approvalMode": {
+          "type": "string",
+          "enum": [
+            "alwaysAsk",
+            "askForRisky",
+            "autoApproveSafe",
+            "autonomous"
+          ],
+          "enumDescriptions": [
+            "Ask before every tool, including reads.",
+            "Read-only tools run automatically; edits and commands need approval.",
+            "Read-only and write tools run automatically; commands and deletions need approval.",
+            "Run every tool without asking. Use with care."
+          ],
+          "default": "askForRisky",
+          "description": "How much the agent may do without asking."
+        },
+        "mytechin.autoApproveSafeTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let read-only tools (read, search, list, problems) run without a prompt."
+        },
+        "mytechin.maxToolIterations": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum tool calls in a single task before the agent stops."
+        },
+        "mytechin.maxContextTokens": {
+          "type": "number",
+          "default": 32000,
+          "minimum": 2000,
+          "description": "Approximate token budget for everything sent to the model."
+        },
+        "mytechin.maxFileReadBytes": {
+          "type": "number",
+          "default": 262144,
+          "description": "Largest slice of a single file the agent will read in one call."
+        },
+        "mytechin.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature."
+        },
+        "mytechin.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum tokens in a single model reply."
+        },
+        "mytechin.streaming": {
+          "type": "boolean",
+          "default": true,
+          "description": "Stream replies as they are generated."
+        },
+        "mytechin.enableWorkspaceIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Build a lightweight file map of the workspace for search and ranking."
+        },
+        "mytechin.enableCheckpoints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Snapshot files before the agent changes them so you can restore."
+        },
+        "mytechin.logging.level": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "default": "info",
+          "description": "Verbosity of the Mytechin AI output channel."
+        },
+        "mytechin.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra glob patterns to exclude, on top of .gitignore and the built-in list."
+        },
+        "mytechin.terminalTimeout": {
+          "type": "number",
+          "default": 120000,
+          "description": "Milliseconds before a command started by the agent is cancelled."
+        },
+        "mytechin.warnOnSensitiveUpload": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn before sending secrets or credential files to a cloud provider."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "install:all": "npm install && npm --prefix webview-ui install",
+    "build:webview": "npm --prefix webview-ui run build",
+    "build:extension": "node esbuild.mjs --production",
+    "build": "npm run build:webview && npm run build:extension",
+    "watch:extension": "node esbuild.mjs --watch",
+    "watch:webview": "npm --prefix webview-ui run dev",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm --prefix webview-ui run typecheck",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\" \"webview-ui/src/**/*.{ts,tsx}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository -o mytechin-ai.vsix",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "diff": "^5.2.0",
+    "ignore": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.2.3",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "@vscode/codicons": "^0.0.36",
+    "@vscode/vsce": "^2.32.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
