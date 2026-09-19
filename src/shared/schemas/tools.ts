@@ -14,10 +14,14 @@ export const TOOL_NAMES = [
   'create_file',
   'delete_file',
   'apply_patch',
+  'multi_apply_patch',
   'open_file',
   'open_diff',
   'run_command',
-  'ask_user'
+  'ask_user',
+  'web_search',
+  'browse_page',
+  'extract_content'
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -42,8 +46,12 @@ export const TOOL_RISK: Record<ToolName, ToolRisk> = {
   write_file: 'ask',
   create_file: 'ask',
   apply_patch: 'ask',
+  multi_apply_patch: 'ask',
   run_command: 'strong',
-  delete_file: 'strong'
+  delete_file: 'strong',
+  web_search: 'ask',
+  browse_page: 'ask',
+  extract_content: 'ask'
 };
 
 /** Command fragments that always require explicit approval, whatever the mode. */

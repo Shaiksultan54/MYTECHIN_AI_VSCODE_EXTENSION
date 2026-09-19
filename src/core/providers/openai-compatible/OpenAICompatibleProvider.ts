@@ -108,13 +108,36 @@ export class OpenAICompatibleProvider extends BaseProvider {
       throw new ProviderError('not-configured', `No ${this.name} model selected.`, 'Pick a model in the sidebar.');
     }
 
+    let lastToolCallId = 'tool';
     const messages = [
       ...(req.system ? [{ role: 'system', content: req.system }] : []),
-      ...req.messages.map((m) =>
-        m.role === 'tool'
-          ? { role: 'tool', content: m.content, tool_call_id: m.toolCallId ?? m.name ?? 'tool' }
-          : { role: m.role, content: m.content }
-      )
+      ...req.messages.map((m) => {
+        if (m.role === 'tool') {
+          return { role: 'tool', content: m.content, tool_call_id: lastToolCallId, name: m.name };
+        }
+        if (m.role === 'assistant' && typeof m.content === 'string') {
+          const match = m.content.match(/<tool name="([^"]+)">\s*([\s\S]*?)\s*<\/tool>/);
+          if (match) {
+            const name = match[1];
+            const args = match[2];
+            const textContent = m.content.replace(match[0], '').trim();
+            lastToolCallId = `call_${Math.random().toString(36).slice(2)}`;
+            const assistantMsg: any = {
+              role: 'assistant',
+              tool_calls: [{
+                id: lastToolCallId,
+                type: 'function',
+                function: { name, arguments: args }
+              }]
+            };
+            if (textContent) {
+              assistantMsg.content = textContent;
+            }
+            return assistantMsg;
+          }
+        }
+        return { role: m.role, content: m.content };
+      })
     ];
 
     const body: Record<string, unknown> = {

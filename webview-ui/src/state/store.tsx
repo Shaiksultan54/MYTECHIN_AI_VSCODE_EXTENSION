@@ -16,15 +16,17 @@ import type {
   ContextAttachment,
   ContextSummaryView,
   ConversationSummary,
+  McpServerStatusView,
   MentionItem,
   ModelInfo,
   ProviderStatusView,
   SettingsView,
-  WorkspaceSummary
+  WorkspaceSummary,
+  MemoryEntry
 } from '../../../src/shared/types.js';
 import { post } from '../vscode.js';
 
-export type Panel = 'chat' | 'settings' | 'history' | 'context';
+export type Panel = 'chat' | 'settings' | 'history' | 'context' | 'memory';
 
 export interface AppState {
   ready: boolean;
@@ -47,6 +49,8 @@ export interface AppState {
   notice: { level: 'info' | 'warn' | 'error'; message: string; at: number } | undefined;
   mentions: { requestId: string; items: MentionItem[] };
   prefill: { text: string; at: number } | undefined;
+  mcpServers: McpServerStatusView[];
+  memory: MemoryEntry[];
 }
 
 const initialState: AppState = {
@@ -69,7 +73,9 @@ const initialState: AppState = {
   error: undefined,
   notice: undefined,
   mentions: { requestId: '', items: [] },
-  prefill: undefined
+  prefill: undefined,
+  mcpServers: [],
+  memory: []
 };
 
 export type Action =
@@ -129,7 +135,9 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
         attachments: event.state.attachments,
         conversations: event.state.conversations,
         checkpoints: event.state.checkpoints,
-        phase: event.state.phase
+        phase: event.state.phase,
+        mcpServers: event.state.mcpServers,
+        memory: event.state.memory
       };
 
     case 'settingsUpdated':
@@ -157,7 +165,7 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
       return { ...state, conversations: event.conversations };
 
     case 'messageAppended':
-      return { ...state, messages: [...state.messages, event.message], error: undefined };
+      return { ...state, panel: 'chat', messages: [...state.messages, event.message], error: undefined };
 
     case 'assistantStarted':
       return { ...state, phase: 'streaming' };
@@ -240,6 +248,12 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
 
     case 'showPanel':
       return { ...state, panel: event.panel };
+
+    case 'mcpServersUpdated':
+      return { ...state, mcpServers: event.servers };
+
+    case 'memoryUpdated':
+      return { ...state, memory: event.memory };
 
     default:
       return state;

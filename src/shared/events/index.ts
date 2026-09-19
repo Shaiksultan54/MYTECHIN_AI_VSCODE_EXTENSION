@@ -6,6 +6,7 @@ import type {
   ContextAttachment,
   ContextSummaryView,
   ConversationSummary,
+  McpServerStatusView,
   MentionItem,
   ModelInfo,
   ProviderStatusView,
@@ -39,7 +40,9 @@ export type ExtensionEvent =
   | { type: 'mentionResults'; requestId: string; items: MentionItem[] }
   | { type: 'notification'; level: 'info' | 'warn' | 'error'; message: string }
   | { type: 'focusComposer'; prefill?: string }
-  | { type: 'showPanel'; panel: 'chat' | 'settings' | 'history' | 'context' };
+  | { type: 'showPanel'; panel: 'chat' | 'settings' | 'history' | 'context' | 'memory' }
+  | { type: 'mcpServersUpdated'; servers: McpServerStatusView[] }
+  | { type: 'memoryUpdated'; memory: import('../types.js').MemoryEntry[] };
 
 export interface HydrateState {
   settings: SettingsView;
@@ -53,4 +56,6 @@ export interface HydrateState {
   conversations: ConversationSummary[];
   checkpoints: CheckpointView[];
   phase: AgentPhase;
+  mcpServers: McpServerStatusView[];
+  memory: import('../types.js').MemoryEntry[];
 }

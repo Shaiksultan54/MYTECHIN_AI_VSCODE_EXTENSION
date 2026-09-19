@@ -33,11 +33,7 @@ export function Message({ message }: { message: ChatMessage }): JSX.Element {
         )
       ) : null}
 
-      {message.streaming && !message.text ? (
-        <p className="message-placeholder">
-          <Icon name="loading" spin /> Thinking…
-        </p>
-      ) : null}
+
 
       {message.error ? (
         <p className="message-error">

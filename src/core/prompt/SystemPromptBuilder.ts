@@ -61,20 +61,21 @@ export class SafetyPromptBuilder {
 
 /** WORKSPACE, CURRENT EDITOR, USER CONTEXT, ATTACHMENTS. */
 export class WorkspaceContextBuilder {
-  build(context: BuiltContext, projectMemory: string[]): PromptSection[] {
+  build(context: BuiltContext, projectMemory: import('../../shared/types.js').MemoryEntry[]): PromptSection[] {
     const sections: PromptSection[] = [];
     const group = (predicate: (p: ContextPiece) => boolean): ContextPiece[] =>
       context.pieces.filter(predicate);
 
     const workspaceMap = group((p) => p.source === 'workspace-map');
     if (workspaceMap.length > 0) {
-      const body = [
-        workspaceMap.map((p) => p.body).join('\n'),
-        projectMemory.length > 0 ? `\nKnown about this project:\n${projectMemory.map((f) => `- ${f}`).join('\n')}` : ''
-      ]
-        .filter(Boolean)
-        .join('\n');
-      sections.push({ heading: 'WORKSPACE', body });
+      sections.push({ heading: 'WORKSPACE', body: workspaceMap.map((p) => p.body).join('\n') });
+    }
+
+    if (projectMemory.length > 0) {
+      sections.push({
+        heading: 'PROJECT MEMORY',
+        body: projectMemory.map((entry) => `[${entry.category.toUpperCase()}]\n${entry.content}`).join('\n\n')
+      });
     }
 
     const editor = group((p) => p.source === 'current-editor');
@@ -216,7 +217,7 @@ export class SystemPromptBuilder {
     approvalMode: ApprovalMode;
     isCloud: boolean;
     providerName: string;
-    projectMemory: string[];
+    projectMemory: import('../../shared/types.js').MemoryEntry[];
   }): string {
     const sections: PromptSection[] = [
       ...this.role.build(),

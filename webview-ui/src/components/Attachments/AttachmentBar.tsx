@@ -4,6 +4,8 @@ import { post } from '../../vscode.js';
 import { Icon } from '../Icon.js';
 import { attachmentDetail, attachmentIcon, attachmentLabel } from '../../utils/format.js';
 
+import { ImagePreview } from './ImagePreview.js';
+
 export interface AttachmentBarProps {
   attachments: ContextAttachment[];
   removable?: boolean;
@@ -15,9 +17,20 @@ export function AttachmentBar({ attachments, removable = true }: AttachmentBarPr
     return null;
   }
 
+  const images = attachments.filter((a) => a.type === 'image');
+  const files = attachments.filter((a) => a.type !== 'image');
+
   return (
     <div className="attachments" role="list">
-      {attachments.map((attachment) => {
+      {images.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: files.length > 0 ? 8 : 0 }}>
+          {images.map((attachment) => (
+            <ImagePreview key={attachment.id} attachment={attachment} removable={removable} />
+          ))}
+        </div>
+      ) : null}
+
+      {files.map((attachment) => {
         const detail = attachmentDetail(attachment);
         return (
           <span

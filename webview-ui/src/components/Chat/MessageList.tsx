@@ -52,7 +52,9 @@ export function MessageList({ messages, approvals, phaseLabel, busy }: MessageLi
         </button>
       ) : null}
 
-      {visible.map((message) => (
+      {visible
+        .filter((message) => !(message.role === 'assistant' && !message.text && !message.toolCalls?.length && message.streaming))
+        .map((message) => (
         <Message key={message.id} message={message} />
       ))}
 

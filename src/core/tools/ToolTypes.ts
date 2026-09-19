@@ -1,6 +1,5 @@
 import type * as vscode from 'vscode';
 import type { ToolRisk } from '../../shared/types.js';
-import type { ToolName } from '../../shared/schemas/tools.js';
 import type { WorkspaceManager } from '../workspace/WorkspaceManager.js';
 import type { FileReader } from '../workspace/FileReader.js';
 import type { FileWriter } from '../workspace/FileWriter.js';
@@ -38,6 +37,7 @@ export interface ToolContext {
   terminal: TerminalManager;
   checkpoints: CheckpointManager;
   diffs: DiffManager;
+  browser?: import('../browser/BrowserService.js').BrowserService;
   token: vscode.CancellationToken;
   conversationId: string;
   /** Short status line pushed to the UI while the tool runs. */
@@ -47,9 +47,10 @@ export interface ToolContext {
 }
 
 export interface ToolDefinition<TInput = Record<string, unknown>> {
-  name: ToolName;
+  name: string;
   description: string;
   risk: ToolRisk;
+  source?: 'core' | 'mcp' | 'browser' | 'system';
   /** JSON Schema for native tool-calling providers and for validation. */
   parameters: {
     type: 'object';

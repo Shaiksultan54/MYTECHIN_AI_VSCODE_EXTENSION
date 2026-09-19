@@ -12,6 +12,12 @@ import { FileWriter } from '../workspace/FileWriter.js';
 import { FileSearcher } from '../workspace/FileSearcher.js';
 import { WorkspaceScanner } from '../workspace/WorkspaceScanner.js';
 import { WorkspaceWatcher } from '../workspace/WorkspaceWatcher.js';
+import { VisionAdapter } from '../vision/VisionAdapter.js';
+import { BrowserService } from '../browser/BrowserService.js';
+import { SemanticSearchService } from '../search/SemanticSearchService.js';
+import { OllamaEmbeddingProvider } from '../search/EmbeddingProvider.js';
+import { ProjectMemoryService } from '../memory/ProjectMemoryService.js';
+import { MemoryRetriever } from '../memory/MemoryRetriever.js';
 import { TerminalManager } from '../terminal/TerminalManager.js';
 import { DiffManager } from '../checkpoints/DiffManager.js';
 import { CheckpointManager } from '../checkpoints/CheckpointManager.js';
@@ -27,6 +33,8 @@ import { ContextManager } from '../context/ContextManager.js';
 import { ConversationStore } from '../conversation/ConversationStore.js';
 import { ConversationManager } from '../conversation/ConversationManager.js';
 import { AgentRuntime } from '../agent/AgentRuntime.js';
+import { McpConfigStore } from '../mcp/McpConfigStore.js';
+import { McpServerManager } from '../mcp/McpServerManager.js';
 
 /**
  * The single wiring point of the extension. It constructs every service, owns
@@ -49,6 +57,7 @@ export class ExtensionController implements vscode.Disposable {
   readonly approvals: ApprovalManager;
   readonly agent: AgentRuntime;
   readonly diffs: DiffManager;
+  readonly mcp: McpServerManager;
 
   private readonly reader: FileReader;
   private readonly writer: FileWriter;
@@ -57,6 +66,9 @@ export class ExtensionController implements vscode.Disposable {
   private readonly registry: ToolRegistry;
   private readonly executor: ToolExecutor;
   private readonly watcher: WorkspaceWatcher;
+  private readonly browserService: BrowserService;
+  private readonly semanticSearch: SemanticSearchService;
+  readonly memoryService: ProjectMemoryService;
 
   /** Resolver for a pending `ask_user` tool call. */
   private pendingQuestion: ((answer: string) => void) | undefined;
@@ -104,12 +116,26 @@ export class ExtensionController implements vscode.Disposable {
     );
 
     this.registry = new ToolRegistry();
+    this.browserService = new BrowserService(Logger.get());
+
     this.executor = new ToolExecutor(this.registry, this.approvals, (token) =>
       this.toolContext(token)
     );
 
+    const mcpConfigStore = new McpConfigStore(this.workspace, this.reader, this.writer, this.settings);
+    this.mcp = new McpServerManager(mcpConfigStore, this.registry);
+
     this.attachments = new AttachmentManager(this.workspace, this.reader, () =>
       this.emit({ type: 'attachmentsUpdated', attachments: this.attachments.list() })
+    );
+
+    const embedder = new OllamaEmbeddingProvider(this.settings);
+    this.semanticSearch = new SemanticSearchService(
+      this.workspace,
+      this.reader,
+      this.searcher,
+      embedder,
+      Logger.get()
     );
 
     const collector = new ContextCollector(
@@ -117,7 +143,8 @@ export class ExtensionController implements vscode.Disposable {
       this.reader,
       this.searcher,
       this.scanner,
-      this.attachments
+      this.attachments,
+      this.semanticSearch
     );
     this.context = new ContextManager(
       collector,
@@ -136,11 +163,21 @@ export class ExtensionController implements vscode.Disposable {
       () => this.settings.read().model
     );
 
+    const rootFolderUri = this.workspace.folders[0]?.uri;
+    this.memoryService = new ProjectMemoryService(rootFolderUri, Logger.get());
+    void this.memoryService.load();
+    const memoryRetriever = new MemoryRetriever(this.memoryService, this.semanticSearch);
+
+    const visionAdapter = new VisionAdapter(this.workspace, this.reader);
+
     this.agent = new AgentRuntime({
       provider: () => this.providers.active(),
       registry: this.registry,
       executor: this.executor,
       conversations: this.conversations,
+      attachments: this.attachments,
+      vision: visionAdapter,
+      memory: memoryRetriever,
       context: this.context,
       settings: this.settings,
       checkpoints: this.checkpoints,
@@ -161,6 +198,10 @@ export class ExtensionController implements vscode.Disposable {
       this.diffs,
       this.watcher,
       this.agent,
+      this.mcp,
+      this.mcp.onDidChange(() => {
+        this.emit({ type: 'mcpServersUpdated', servers: this.mcp.getStatusesView() });
+      }),
       this.settings.onDidChange((next) => {
         Logger.get().setLevel(next.loggingLevel as LogLevel);
         this.workspace.ignoreRules.setExtraPatterns(this.settings.excludePatterns());
@@ -194,7 +235,9 @@ export class ExtensionController implements vscode.Disposable {
 
   async initialize(): Promise<void> {
     await this.conversations.startNew();
+    await this.mcp.initialize();
     void this.refreshWorkspace();
+    void this.testConnection();
   }
 
   // ----------------------------------------------------------------- messages
@@ -287,6 +330,10 @@ export class ExtensionController implements vscode.Disposable {
         this.attachments.addPastedCode(message.text, message.language);
         return;
 
+      case 'attachDataUrl':
+        this.attachments.addDataUrl(message.name, message.dataUrl, message.mimeType);
+        return;
+
       case 'removeAttachment':
         this.attachments.remove(message.attachmentId);
         return;
@@ -306,10 +353,12 @@ export class ExtensionController implements vscode.Disposable {
 
       case 'selectProvider':
         await this.settings.update({ provider: message.providerId, model: '' });
+        await this.testConnection(message.providerId);
         return;
 
       case 'selectModel':
         await this.settings.update({ model: message.modelId });
+        await this.testConnection();
         return;
 
       case 'refreshModels':
@@ -387,6 +436,63 @@ export class ExtensionController implements vscode.Disposable {
 
       case 'showLogs':
         Logger.get().show();
+        return;
+
+      case 'rebuildSemanticIndex':
+        this.emit({ type: 'notification', level: 'info', message: 'Rebuilding semantic index in background...' });
+        void this.semanticSearch.indexWorkspace();
+        return;
+
+      case 'getMemory':
+        this.emit({ type: 'memoryUpdated', memory: this.memoryService.getEntries() });
+        return;
+
+      case 'addMemory':
+        this.memoryService.addEntry(message.category as any, message.content);
+        await this.memoryService.save();
+        this.emit({ type: 'memoryUpdated', memory: this.memoryService.getEntries() });
+        return;
+
+      case 'updateMemory':
+        this.memoryService.updateEntry(message.id, message.content);
+        await this.memoryService.save();
+        this.emit({ type: 'memoryUpdated', memory: this.memoryService.getEntries() });
+        return;
+
+      case 'removeMemory':
+        this.memoryService.removeEntry(message.id);
+        await this.memoryService.save();
+        this.emit({ type: 'memoryUpdated', memory: this.memoryService.getEntries() });
+        return;
+
+      case 'addMcpServer': {
+        const { McpConfigStore } = await import('../mcp/McpConfigStore.js');
+        const configStore = new McpConfigStore(this.workspace, this.reader, this.writer, this.settings);
+        await configStore.addServer(message.config);
+        return;
+      }
+
+      case 'removeMcpServer': {
+        const { McpConfigStore } = await import('../mcp/McpConfigStore.js');
+        const configStore = new McpConfigStore(this.workspace, this.reader, this.writer, this.settings);
+        await configStore.removeServer(message.id);
+        return;
+      }
+
+      case 'toggleMcpServer': {
+        const { McpConfigStore } = await import('../mcp/McpConfigStore.js');
+        const configStore = new McpConfigStore(this.workspace, this.reader, this.writer, this.settings);
+        const configs = await configStore.read();
+        const config = configs.find((c: any) => c.id === message.id);
+        if (config) {
+          config.disabled = message.disabled;
+          await configStore.write(configs);
+        }
+        return;
+      }
+
+      case 'restartMcpServer':
+        await this.mcp.restart(message.id);
         return;
 
       default: {
@@ -507,7 +613,11 @@ export class ExtensionController implements vscode.Disposable {
       puter: 'Puter API token (optional — leave empty for free auto-session)',
       openai: 'OpenAI API key',
       anthropic: 'Anthropic API key',
-      'openai-compatible': 'API key for the custom endpoint'
+      'openai-compatible': 'API key for the custom endpoint',
+      gemini: 'Google Gemini API key',
+      groq: 'Groq API key',
+      openrouter: 'OpenRouter API key',
+      github: 'GitHub Personal Access Token (for GitHub Models)'
     };
 
     const value = await vscode.window.showInputBox({
@@ -617,7 +727,9 @@ export class ExtensionController implements vscode.Disposable {
       attachments: this.attachments.list(),
       conversations,
       checkpoints: this.checkpoints.forConversation(this.conversations.id),
-      phase: this.agent.phase
+      phase: this.agent.phase,
+      mcpServers: this.mcp.getStatusesView(),
+      memory: this.memoryService.getEntries()
     };
     this.emit({ type: 'hydrate', state });
     void this.refreshWorkspace();
@@ -653,6 +765,7 @@ export class ExtensionController implements vscode.Disposable {
       terminal: this.terminal,
       checkpoints: this.checkpoints,
       diffs: this.diffs,
+      browser: this.browserService,
       token,
       conversationId: this.conversations.id,
       report: (status) => this.emit({ type: 'phaseChanged', phase: 'running-tool', label: status }),
@@ -722,6 +835,8 @@ export class ExtensionController implements vscode.Disposable {
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
+    this.browserService.dispose();
+    this.semanticSearch.dispose();
     this.disposables.length = 0;
   }
 }

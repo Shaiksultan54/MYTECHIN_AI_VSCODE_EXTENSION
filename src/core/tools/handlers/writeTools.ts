@@ -300,3 +300,124 @@ export const deleteFileTool: ToolDefinition = {
     return ok('delete_file', `Deleted ${resolved.relativePath}`, { path: resolved.relativePath });
   }
 };
+
+export const multiApplyPatchTool: ToolDefinition = {
+  name: 'multi_apply_patch',
+  risk: TOOL_RISK.multi_apply_patch,
+  description:
+    'Make targeted changes to multiple files simultaneously. Pass "changes" as an array of objects, where each object has a "path" and an array of find/replace "edits".',
+  parameters: {
+    type: 'object',
+    properties: {
+      changes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            edits: {
+              type: 'array',
+              description: 'Find/replace blocks applied in order to this file.',
+              items: {
+                type: 'object',
+                properties: {
+                  find: { type: 'string', description: 'Exact existing text, including indentation.' },
+                  replace: { type: 'string', description: 'Replacement text. Empty string deletes.' }
+                },
+                required: ['find']
+              }
+            }
+          },
+          required: ['path', 'edits']
+        }
+      }
+    },
+    required: ['changes']
+  },
+  title: (input) => {
+    const changes = Array.isArray(input.changes) ? input.changes : [];
+    return `Edit ${changes.length} file${changes.length === 1 ? '' : 's'}`;
+  },
+  async preview(input, ctx) {
+    const changes = Array.isArray(input.changes) ? input.changes : [];
+    if (changes.length === 0) {
+      return { title: 'No changes', detail: 'No files to edit.', path: '' };
+    }
+    
+    let combinedDiff = '';
+    let totalLinesChanged = 0;
+    
+    for (const change of changes) {
+      if (!change || typeof change !== 'object') continue;
+      const path = typeof (change as any).path === 'string' ? (change as any).path : '';
+      if (!path) continue;
+      
+      const resolved = ctx.workspace.resolve(path);
+      const current = (await ctx.writer.readCurrent(resolved)) ?? '';
+      
+      const proposed = applyPatchInput(change as any, current);
+      if (proposed.error) {
+        return { title: `Edit cannot be applied to ${path}`, detail: proposed.error, path: resolved.relativePath };
+      }
+      
+      const patch = createTwoFilesPatch(
+        resolved.relativePath,
+        resolved.relativePath,
+        current,
+        proposed.content,
+        'current',
+        'proposed',
+        { context: 3 }
+      );
+      
+      combinedDiff += patch + '\n';
+      totalLinesChanged += Math.abs(proposed.content.split('\n').length - current.split('\n').length);
+    }
+    
+    return {
+      title: `Apply edits to ${changes.length} files`,
+      detail: `${changes.length} files · ${totalLinesChanged > 0 ? '+' : ''}${totalLinesChanged} lines`,
+      diff: combinedDiff,
+      path: ''
+    };
+  },
+  async execute(input, ctx) {
+    const changes = Array.isArray(input.changes) ? input.changes : [];
+    if (changes.length === 0) {
+      return fail('multi_apply_patch', 'No changes provided.');
+    }
+
+    // Pre-flight check
+    for (const change of changes) {
+      if (!change || typeof change !== 'object') continue;
+      const path = typeof (change as any).path === 'string' ? (change as any).path : '';
+      if (!path) return fail('multi_apply_patch', 'A change is missing a path.');
+      
+      const resolved = ctx.workspace.resolve(path);
+      if (!(await ctx.workspace.exists(resolved))) {
+        return fail('multi_apply_patch', `${resolved.relativePath} does not exist. Use create_file instead.`);
+      }
+      const current = (await ctx.writer.readCurrent(resolved)) ?? '';
+      const proposed = applyPatchInput(change as any, current);
+      if (proposed.error) {
+        return fail('multi_apply_patch', `Error in ${resolved.relativePath}: ${proposed.error}`);
+      }
+    }
+
+    const results = [];
+    for (const change of changes) {
+      if (!change || typeof change !== 'object') continue;
+      const path = (change as any).path as string;
+      const resolved = ctx.workspace.resolve(path);
+      const current = (await ctx.writer.readCurrent(resolved)) ?? '';
+      const proposed = applyPatchInput(change as any, current);
+      
+      if (proposed.content !== current) {
+        await commit(ctx, 'multi_apply_patch', path, proposed.content, 'multi_apply_patch');
+        results.push(resolved.relativePath);
+      }
+    }
+
+    return ok('multi_apply_patch', `Edited ${results.length} files`, { files: results });
+  }
+};

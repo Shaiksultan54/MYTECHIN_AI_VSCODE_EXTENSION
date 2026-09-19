@@ -5,6 +5,8 @@ import type { ToolExecutor } from '../tools/ToolExecutor.js';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { ConversationManager } from '../conversation/ConversationManager.js';
 import type { ContextManager } from '../context/ContextManager.js';
+import type { AttachmentManager } from '../context/AttachmentManager.js';
+import type { VisionAdapter } from '../vision/VisionAdapter.js';
 import type { SettingsStore } from '../storage/SettingsStore.js';
 import type { CheckpointManager } from '../checkpoints/CheckpointManager.js';
 import type { ApprovalManager } from '../approval/ApprovalManager.js';
@@ -19,6 +21,9 @@ export interface AgentRuntimeDeps {
   executor: ToolExecutor;
   conversations: ConversationManager;
   context: ContextManager;
+  attachments: AttachmentManager;
+  vision: VisionAdapter;
+  memory: import('../memory/MemoryRetriever.js').MemoryRetriever;
   settings: SettingsStore;
   checkpoints: CheckpointManager;
   approvals: ApprovalManager;
@@ -47,6 +52,9 @@ export class AgentRuntime implements vscode.Disposable {
       executor: deps.executor,
       conversations: deps.conversations,
       context: deps.context,
+      attachments: deps.attachments,
+      vision: deps.vision,
+      memory: deps.memory,
       settings: deps.settings,
       checkpoints: deps.checkpoints,
       events: deps.events,

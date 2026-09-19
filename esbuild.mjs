@@ -26,7 +26,7 @@ const options = {
   platform: 'node',
   target: 'node18',
   outfile: 'dist/extension.js',
-  external: ['vscode'],
+  external: ['vscode', 'playwright-core', 'chromium-bidi/lib/cjs/bidiMapper/BidiMapper', 'chromium-bidi/lib/cjs/cdp/CdpConnection'],
   sourcemap: !production,
   minify: production,
   logLevel: 'info'

@@ -9,6 +9,10 @@ import { OllamaProvider } from './ollama/OllamaProvider.js';
 import { OpenAICompatibleProvider } from './openai-compatible/OpenAICompatibleProvider.js';
 import { OpenAIProvider } from './openai/OpenAIProvider.js';
 import { PuterProvider } from './puter/PuterProvider.js';
+import { GeminiProvider } from './gemini/GeminiProvider.js';
+import { GroqProvider } from './groq/GroqProvider.js';
+import { OpenRouterProvider } from './openrouter/OpenRouterProvider.js';
+import { GitHubProvider } from './github/GitHubProvider.js';
 import { ProviderError, type ProviderStatus } from './ProviderTypes.js';
 
 /**
@@ -31,9 +35,13 @@ export class ProviderManager implements vscode.Disposable {
     this.providers.set('openai', new OpenAIProvider());
     this.providers.set('anthropic', new AnthropicProvider());
     this.providers.set('openai-compatible', new OpenAICompatibleProvider());
+    this.providers.set('gemini', new GeminiProvider());
+    this.providers.set('groq', new GroqProvider());
+    this.providers.set('openrouter', new OpenRouterProvider());
+    this.providers.set('github', new GitHubProvider());
 
     for (const id of this.providers.keys()) {
-      this.statuses.set(id, { state: id === 'ollama' ? 'checking' : 'not-configured' });
+      this.statuses.set(id, { state: id === 'ollama' || id === 'puter' ? 'checking' : 'not-configured' });
     }
   }
 
@@ -79,9 +87,20 @@ export class ProviderManager implements vscode.Disposable {
           apiKey
         });
         break;
+      case 'gemini':
+      case 'groq':
+      case 'openrouter':
+      case 'github':
+        provider.configure({ apiKey });
+        break;
       default:
         break;
     }
+  }
+
+  /** Instantly returns cached models without blocking on network requests. */
+  getCachedModels(id: ProviderId = this.activeId): ModelInfo[] {
+    return this.modelCache.get(id)?.models ?? [];
   }
 
   /** Model list for the active provider, cached for a minute. */
@@ -95,6 +114,10 @@ export class ProviderManager implements vscode.Disposable {
       const provider = await this.active();
       const models = await provider.listModels();
       this.modelCache.set(id, { at: Date.now(), models });
+      if (models.length > 0 && this.statuses.get(id)?.state !== 'connected') {
+        this.statuses.set(id, { state: 'connected' });
+        this.emitter.fire();
+      }
       return models;
     } catch (error) {
       Logger.get().warn(`Could not list models for ${id}`, error);

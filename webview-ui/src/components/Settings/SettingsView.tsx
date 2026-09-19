@@ -10,6 +10,7 @@ import { Icon } from '../Icon.js';
 export interface SettingsViewProps {
   settings: Settings;
   providers: ProviderStatusView[];
+  mcpServers: import('../../../../src/shared/types.js').McpServerStatusView[];
 }
 
 const APPROVAL_MODES: { value: ApprovalMode; label: string; detail: string }[] = [
@@ -89,7 +90,7 @@ function TextField(props: {
   );
 }
 
-export function SettingsView({ settings, providers }: SettingsViewProps): JSX.Element {
+export function SettingsView({ settings, providers, mcpServers }: SettingsViewProps): JSX.Element {
   const active = providers.find((provider) => provider.id === settings.provider);
 
   return (
@@ -208,6 +209,113 @@ export function SettingsView({ settings, providers }: SettingsViewProps): JSX.El
         </section>
       ) : null}
 
+      {settings.provider === 'gemini' ? (
+        <section className="settings-section">
+          <h4>Google Gemini (Google AI Studio)</h4>
+          <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
+            <strong>🆓 Generous Free Tier!</strong> Get a free API key for Gemini Flash and Pro models at{' '}
+            <a href="https://aistudio.google.com/app/apikey" style={{ color: 'var(--vscode-textLink-foreground)' }}>Google AI Studio</a>.
+            Add your token using the "Add credential" button above.
+          </p>
+        </section>
+      ) : null}
+
+      {settings.provider === 'groq' ? (
+        <section className="settings-section">
+          <h4>Groq</h4>
+          <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
+            <strong>⚡ Ultra-fast Inference!</strong> Groq offers high-speed inference for open-weights models like Llama 3 and Mixtral. Get your free API key at{' '}
+            <a href="https://console.groq.com/" style={{ color: 'var(--vscode-textLink-foreground)' }}>Groq Console</a>.
+          </p>
+        </section>
+      ) : null}
+
+      {settings.provider === 'openrouter' ? (
+        <section className="settings-section">
+          <h4>OpenRouter</h4>
+          <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
+            <strong>🔄 Multi-Model Router!</strong> Access dozens of free variants and premium models instantly. Automatically filters for tool calling and vision. Get your key at{' '}
+            <a href="https://openrouter.ai/" style={{ color: 'var(--vscode-textLink-foreground)' }}>OpenRouter</a>.
+          </p>
+        </section>
+      ) : null}
+
+      {settings.provider === 'github' ? (
+        <section className="settings-section">
+          <h4>GitHub Models</h4>
+          <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
+            <strong>🛠️ Developer Friendly!</strong> Use your GitHub account to access popular models in the GitHub ecosystem for free. Find out more at{' '}
+            <a href="https://github.com/marketplace/models" style={{ color: 'var(--vscode-textLink-foreground)' }}>GitHub Models</a>.
+          </p>
+        </section>
+      ) : null}
+
+      <section className="settings-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h4 style={{ margin: 0 }}>MCP Servers</h4>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              // Normally this would open a dialog or command palette, let's keep it simple for now
+              post({ type: 'addMcpServer', config: { id: `mcp-${Date.now()}`, command: 'npx', args: ['-y', '@modelcontextprotocol/server-everything'] } });
+            }}
+          >
+            Add
+          </button>
+        </div>
+        <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
+          Model Context Protocol servers provide additional tools and context.
+        </p>
+        
+        {mcpServers.length === 0 ? (
+          <div className="field-hint">No MCP servers configured.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {mcpServers.map((server) => (
+              <div key={server.id} style={{ border: '1px solid var(--vscode-widget-border)', padding: 12, borderRadius: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {server.config.id}
+                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: server.state === 'connected' ? 'var(--vscode-testing-iconPassed)' : server.state === 'error' ? 'var(--vscode-testing-iconFailed)' : 'var(--vscode-badge-background)', color: server.state === 'connected' ? '#fff' : 'inherit' }}>
+                        {server.state}
+                      </span>
+                    </strong>
+                    <div className="field-hint" style={{ marginTop: 4 }}>
+                      <code style={{ fontSize: 11 }}>{server.config.command} {server.config.args?.join(' ')}</code>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button type="button" className="icon-button" title={server.config.disabled ? "Enable" : "Disable"} onClick={() => post({ type: 'toggleMcpServer', id: server.id, disabled: !server.config.disabled })}>
+                      <Icon name={server.config.disabled ? 'play' : 'stop'} />
+                    </button>
+                    {!server.config.disabled && (
+                      <button type="button" className="icon-button" title="Restart" onClick={() => post({ type: 'restartMcpServer', id: server.id })}>
+                        <Icon name="refresh" />
+                      </button>
+                    )}
+                    <button type="button" className="icon-button" title="Remove" onClick={() => post({ type: 'removeMcpServer', id: server.id })}>
+                      <Icon name="trash" />
+                    </button>
+                  </div>
+                </div>
+                {server.error ? (
+                  <div className="field-hint" style={{ color: 'var(--vscode-testing-iconFailed)' }}>
+                    {server.error}
+                  </div>
+                ) : null}
+                {server.tools.length > 0 ? (
+                  <div className="field-hint" style={{ marginTop: 8 }}>
+                    <strong>{server.tools.length} tools</strong>: {server.tools.map(t => t.name).join(', ')}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="settings-section">
         <h4>Approval</h4>
         {APPROVAL_MODES.map((mode) => (
@@ -287,6 +395,18 @@ export function SettingsView({ settings, providers }: SettingsViewProps): JSX.El
           />
           Let read-only tools run without asking
         </label>
+      </section>
+
+      <section className="settings-section">
+        <h4>Semantic Search</h4>
+        <div className="button-row">
+          <button type="button" className="link-button" onClick={() => post({ type: 'rebuildSemanticIndex' })}>
+            Rebuild Index
+          </button>
+        </div>
+        <div className="field-hint" style={{ marginTop: '8px' }}>
+          Uses Ollama locally to embed your codebase for semantic search. Rebuilding happens in the background.
+        </div>
       </section>
 
       <section className="settings-section">

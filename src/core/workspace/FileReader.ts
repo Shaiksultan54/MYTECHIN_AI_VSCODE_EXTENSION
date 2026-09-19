@@ -120,6 +120,10 @@ export class FileReader {
     };
   }
 
+  async readBinary(resolved: ResolvedPath): Promise<Uint8Array> {
+    return vscode.workspace.fs.readFile(resolved.uri);
+  }
+
   private async readText(resolved: ResolvedPath, partial: boolean): Promise<string> {
     const open = vscode.workspace.textDocuments.find(
       (doc) => doc.uri.fsPath === resolved.uri.fsPath && !doc.isClosed

@@ -80,6 +80,10 @@ export class OllamaProvider extends BaseProvider {
     return true;
   }
 
+  override supportsVision(): boolean {
+    return true;
+  }
+
   async stream(req: AIRequest, onEvent: (event: AIStreamEvent) => void): Promise<void> {
     if (!req.model) {
       throw new ProviderError('not-configured', 'No Ollama model selected.', 'Pick a model in the sidebar.');
@@ -106,10 +110,32 @@ export class OllamaProvider extends BaseProvider {
           continue;
         }
       }
-      messages.push({
+      let contentString = '';
+      let images: string[] = [];
+
+      if (Array.isArray(m.content)) {
+        for (const part of m.content) {
+          if (part.type === 'text') {
+            contentString += part.text + '\n';
+          } else if (part.type === 'image_url') {
+            const match = /^data:(image\/[a-z+]+);base64,(.*)$/.exec(part.image_url.url);
+            if (match) {
+              images.push(match[2]);
+            }
+          }
+        }
+      } else {
+        contentString = m.content;
+      }
+
+      const msg: any = {
         role: m.role === 'tool' ? 'tool' : m.role,
-        content: m.content
-      });
+        content: contentString.trim()
+      };
+      if (images.length > 0) {
+        msg.images = images;
+      }
+      messages.push(msg);
     }
 
     const body: Record<string, unknown> = {
@@ -206,7 +232,7 @@ export class OllamaProvider extends BaseProvider {
    * protocol, which works on every model.
    */
   private static likelyToolCapable(model: string): boolean {
-    return /llama3\.[123]|llama4|mistral|mixtral|firefunction|command-r|hermes3|devstral|granite|smollm2/i.test(
+    return /llama3\.[123]|llama4|mistral|mixtral|firefunction|command-r|hermes3|devstral|granite|smollm2|qwen/i.test(
       model
     );
   }

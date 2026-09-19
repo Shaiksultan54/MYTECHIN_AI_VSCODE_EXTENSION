@@ -190,6 +190,7 @@ export function registerCommands(
 
     register('mytechin.showContext', async () => {
       await reveal();
+      await controller.emit({ type: 'showPanel', panel: 'context' });
       await controller.handleMessage({ type: 'requestContext' });
     }),
 
@@ -201,6 +202,47 @@ export function registerCommands(
 
     register('mytechin.showLogs', () => {
       Logger.get().show();
+    }),
+
+    register('mytechin.showMemory', async () => {
+      await reveal();
+      await controller.emit({ type: 'showPanel', panel: 'memory' });
+    }),
+
+    register('mytechin.addMemory', async () => {
+      const selection = selectionOf(vscode.window.activeTextEditor);
+      const question = await vscode.window.showInputBox({
+        title: 'Add Project Memory',
+        prompt: 'What rule, decision, or architectural note should I remember?',
+        ignoreFocusOut: true,
+        value: selection?.text ?? ''
+      });
+      if (question?.trim()) {
+        const cat = await vscode.window.showQuickPick(['rules', 'architecture', 'decisions', 'knowledge'], {
+          title: 'Select Memory Category'
+        });
+        if (cat) {
+          controller.memoryService.addEntry(cat as any, question.trim());
+          await controller.memoryService.save();
+          void vscode.window.showInformationMessage('Project memory added.');
+          await reveal();
+          await controller.emit({ type: 'showPanel', panel: 'memory' });
+        }
+      }
+    }),
+
+    register('mytechin.clearMemory', async () => {
+      const confirm = await vscode.window.showWarningMessage('Are you sure you want to clear all project memory?', 'Yes', 'No');
+      if (confirm === 'Yes') {
+        const entries = controller.memoryService.getEntries();
+        for (const entry of [...entries]) {
+          controller.memoryService.removeEntry(entry.id);
+        }
+        await controller.memoryService.save();
+        void vscode.window.showInformationMessage('Project memory cleared.');
+        await reveal();
+        await controller.emit({ type: 'showPanel', panel: 'memory' });
+      }
     })
   ];
 }

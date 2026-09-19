@@ -8,6 +8,8 @@ import type { ToolExecutor } from '../tools/ToolExecutor.js';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { ConversationManager } from '../conversation/ConversationManager.js';
 import type { ContextManager } from '../context/ContextManager.js';
+import type { AttachmentManager } from '../context/AttachmentManager.js';
+import type { VisionAdapter } from '../vision/VisionAdapter.js';
 import { SystemPromptBuilder, TaskPromptBuilder } from '../prompt/SystemPromptBuilder.js';
 import type { SettingsStore } from '../storage/SettingsStore.js';
 import type { CheckpointManager } from '../checkpoints/CheckpointManager.js';
@@ -22,6 +24,8 @@ export interface AgentLoopDeps {
   executor: ToolExecutor;
   conversations: ConversationManager;
   context: ContextManager;
+  attachments: AttachmentManager;
+  vision: VisionAdapter;
   settings: SettingsStore;
   checkpoints: CheckpointManager;
   events: AgentEventSink;
@@ -79,12 +83,29 @@ export class AgentLoop {
         approvalMode: config.approvalMode,
         isCloud: provider.isCloud,
         providerName: provider.name,
-        projectMemory: conversations.project
+        projectMemory: await this.deps.memory.retrieve(userPrompt)
       });
+
+      const images = await this.deps.vision.getImagesAsDataUrls(this.deps.attachments.list());
+      if (images.length > 0 && !provider.supportsVision()) {
+        const note = '> **Note:** You attached images, but the selected model does not support vision capabilities. The images will be ignored.';
+        this.appendText(assistantMessage, `\n\n${note}\n\n`);
+        conversations.addModelTurn({ role: 'assistant', content: note });
+      }
+
+      let userContent: import('../providers/ProviderTypes.js').AIMessageContent = 
+        this.taskPrompt.build(userPrompt, [], 0, config.maxToolIterations).body;
+
+      if (images.length > 0 && provider.supportsVision()) {
+        userContent = [
+          { type: 'text', text: userContent as string },
+          ...images.map((img) => ({ type: 'image_url' as const, image_url: { url: img.url } }))
+        ];
+      }
 
       conversations.addModelTurn({
         role: 'user',
-        content: this.taskPrompt.build(userPrompt, [], 0, config.maxToolIterations).body
+        content: userContent
       });
 
       let iteration = 0;

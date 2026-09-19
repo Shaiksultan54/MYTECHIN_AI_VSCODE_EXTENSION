@@ -7,11 +7,12 @@ webview-ui/index.html
 webview-ui/vite.config.ts
 webview-ui/tsconfig.json
 webview-ui/package*.json
-node_modules/**
 out/**
 **/*.map
 **/*.ts
 !dist/**
+!webview-ui/dist/**
+!media/codicons/**
 .eslintrc.cjs
 .prettierrc
 esbuild.mjs

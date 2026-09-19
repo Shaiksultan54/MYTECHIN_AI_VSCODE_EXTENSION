@@ -12,6 +12,9 @@ declare global {
   }
 }
 
+import { setupMockVsCode } from './mock/mockVsCode.js';
+
+setupMockVsCode();
 const api = window.acquireVsCodeApi?.();
 
 /** The only channel out of the webview. Everything is typed and validated. */

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, type JSX } from 'react';
 import { useAppState, useBusy, useDispatch, type Panel } from './state/store.js';
-import { post } from './vscode.js';
+
 import { Icon } from './components/Icon.js';
 import { MessageList } from './components/Chat/MessageList.js';
 import { EmptyState } from './components/Chat/EmptyState.js';
@@ -9,12 +9,14 @@ import { ModelSelector } from './components/ModelSelector/ModelSelector.js';
 import { SettingsView } from './components/Settings/SettingsView.js';
 import { HistoryView } from './components/History/HistoryView.js';
 import { ContextViewer } from './components/FileContext/ContextViewer.js';
+import { MemoryView } from './components/Memory/MemoryView.js';
 
 const PANEL_TITLE: Record<Panel, string> = {
   chat: 'Mytechin AI',
   settings: 'Settings',
   history: 'History',
-  context: 'Context'
+  context: 'Context',
+  memory: 'Memory'
 };
 
 export function App(): JSX.Element {
@@ -27,14 +29,7 @@ export function App(): JSX.Element {
     [dispatch]
   );
 
-  // The Context button and the showContext command both land here.
-  useEffect(() => {
-    if (state.context && state.panel === 'chat') {
-      setPanel('context');
-    }
-    // Only react to a newly delivered summary.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.context]);
+  // The showContext command lands here.
 
   useEffect(() => {
     if (!state.notice) {
@@ -92,7 +87,7 @@ export function App(): JSX.Element {
 
       <main className="app-body">
         {state.panel === 'settings' ? (
-          <SettingsView settings={state.settings} providers={state.providers} />
+          <SettingsView settings={state.settings} providers={state.providers} mcpServers={state.mcpServers} />
         ) : state.panel === 'history' ? (
           <HistoryView
             conversations={state.conversations}
@@ -101,6 +96,8 @@ export function App(): JSX.Element {
           />
         ) : state.panel === 'context' ? (
           <ContextViewer summary={state.context} />
+        ) : state.panel === 'memory' ? (
+          <MemoryView entries={state.memory} />
         ) : state.messages.length === 0 ? (
           <EmptyState
             workspace={state.workspace}

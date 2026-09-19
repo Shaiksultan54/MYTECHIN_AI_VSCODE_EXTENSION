@@ -11,7 +11,6 @@ import { newConversation, type Conversation, type ModelTurn } from './Conversati
  */
 export class ConversationManager {
   private active: Conversation;
-  private projectMemory: string[] = [];
   private taskMemory: string[] = [];
 
   constructor(
@@ -37,20 +36,6 @@ export class ConversationManager {
 
   get modelTurns(): ModelTurn[] {
     return this.active.modelTurns;
-  }
-
-  /** Stable project facts, carried into every turn of this workspace. */
-  get project(): string[] {
-    return this.projectMemory;
-  }
-
-  rememberProjectFact(fact: string): void {
-    if (!this.projectMemory.includes(fact)) {
-      this.projectMemory.push(fact);
-      if (this.projectMemory.length > 12) {
-        this.projectMemory.shift();
-      }
-    }
   }
 
   /** Scratch notes for the current task only. Cleared when a task ends. */

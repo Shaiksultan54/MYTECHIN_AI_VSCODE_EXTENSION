@@ -74,7 +74,17 @@ credential exists.
 | OpenAI | Yes | `api.openai.com/v1`. |
 | Anthropic | Yes | `api.anthropic.com/v1/messages`. |
 | OpenAI-compatible | Usually | Set your own base URL, including `/v1`. Works with LM Studio, llama.cpp server, vLLM, Groq, Together, OpenRouter and similar. |
-| Puter | Yes | Best-effort; see the caveat below. |
+| Puter | Optional | Free cloud models. See below. |
+
+### Using Puter (Free Cloud Models)
+
+Puter provides access to powerful cloud models (like **Claude 3.5 Sonnet** and **GPT-4o**) completely **free of charge** under their User-Pays model.
+
+By default, the extension will automatically create a temporary guest session to use these models for free without any configuration. However, if you want to link it to your actual Puter account (recommended to persist your limits and identity):
+1. Log into [puter.com](https://puter.com).
+2. Open your browser's Developer Tools (F12) and go to the **Console**.
+3. Run this command to reveal your token: `puter.auth.getToken()`
+4. Copy the output (without the quotes) and paste it into the extension's Settings by clicking **Add credential** under the Puter provider.
 
 ## Using it
 

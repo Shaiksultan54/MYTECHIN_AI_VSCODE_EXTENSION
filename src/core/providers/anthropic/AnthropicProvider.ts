@@ -124,7 +124,29 @@ export class AnthropicProvider extends BaseProvider {
           ]
         });
       } else {
-        messages.push({ role: 'user', content: m.content });
+        if (Array.isArray(m.content)) {
+          const content = m.content.map((part) => {
+            if (part.type === 'text') {
+              return { type: 'text', text: part.text };
+            } else if (part.type === 'image_url') {
+              const match = /^data:(image\/[a-z+]+);base64,(.*)$/.exec(part.image_url.url);
+              if (match) {
+                return {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: match[1],
+                    data: match[2]
+                  }
+                };
+              }
+            }
+            return part;
+          });
+          messages.push({ role: 'user', content });
+        } else {
+          messages.push({ role: 'user', content: m.content });
+        }
       }
     }
 

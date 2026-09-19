@@ -8,18 +8,49 @@ import {
   type ProviderConfig,
   type ProviderStatus
 } from '../ProviderTypes.js';
-import { PuterAuthManager } from './PuterAuthManager.js';
+import { PuterAuth } from './PuterAuth.js';
 import { PuterErrorMapper } from './PuterErrorMapper.js';
-import { PuterModelResolver } from './PuterModelResolver.js';
+import { PuterModelService } from './PuterModelService.js';
 
 /**
- * Puter AI, reached through the `drivers/call` endpoint that puter.js uses in
- * the browser. Everything Puter-specific lives in this folder: the agent loop
- * only ever sees the AIProvider interface.
+ * OpenAI-compatible SSE chunk shape. Matches the wire format of
+ * `POST /puterai/openai/v1/chat/completions` with `stream: true`.
+ */
+interface ChatChunk {
+  choices?: {
+    delta?: {
+      content?: string;
+      reasoning_content?: string;
+      tool_calls?: {
+        index?: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }[];
+    };
+    finish_reason?: string;
+  }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+/**
+ * Puter AI provider — accesses the Puter AI Gateway through its
+ * **OpenAI-compatible endpoint** at `/puterai/openai/v1/`.
  *
- * Note: Puter's driver API is not formally versioned. The request shape below
- * matches puter.js at the time of writing; if Puter changes it, only
- * `buildDriverCall` and `PuterModelResolver` need to change.
+ * Why the OpenAI-compat endpoint and not `@heyputer/puter.js`?
+ *   - The SDK requires Node 24+; VS Code ships Node 20–22.
+ *   - The SDK's `getAuthToken()` opens a browser — unusable in an extension.
+ *   - The OpenAI-compat endpoint is officially documented and recommended
+ *     for non-browser environments.
+ *
+ * Architecture:
+ *   PuterProvider (facade)
+ *     → PuterAuth        (token management + guest sessions)
+ *     → PuterModelService (live model discovery)
+ *     → http.ts           (SSE streaming, same as OpenAICompatibleProvider)
+ *     → PuterErrorMapper  (error normalization)
+ *
+ * The agent loop only sees the AIProvider interface and has no idea
+ * that Puter is involved.
  */
 export class PuterProvider extends BaseProvider {
   readonly id = 'puter';
@@ -27,12 +58,12 @@ export class PuterProvider extends BaseProvider {
   readonly isCloud = true;
   readonly requiresSecret = false;
 
-  private readonly auth = new PuterAuthManager();
-  private readonly models: PuterModelResolver;
+  private readonly auth = new PuterAuth();
+  private readonly models: PuterModelService;
 
   constructor() {
     super();
-    this.models = new PuterModelResolver(this.auth);
+    this.models = new PuterModelService(this.auth);
   }
 
   override configure(config: ProviderConfig): void {
@@ -41,17 +72,27 @@ export class PuterProvider extends BaseProvider {
     this.models.invalidate();
   }
 
+  // ─── Model Discovery ──────────────────────────────────────────────
+
   async listModels(): Promise<ModelInfo[]> {
     return this.models.list();
   }
 
+  // ─── Connection Test ──────────────────────────────────────────────
+
   async testConnection(): Promise<ProviderStatus> {
     try {
-      const who = await this.auth.verify(true);
+      const status = await this.auth.verify(true);
       const models = await this.listModels();
+      const freeCount = models.length; // All Puter models are free via User-Pays
+
+      const authLabel = status.authType === 'account'
+        ? `Signed in as ${status.username ?? 'Puter user'}`
+        : 'Temporary session';
+
       return {
         state: 'connected',
-        message: `${who.username ? `Signed in as ${who.username} · ` : 'Free session · '}${models.length} models`
+        message: `${authLabel} · ${freeCount} free models`
       };
     } catch (error) {
       const mapped = PuterErrorMapper.map(error);
@@ -59,14 +100,26 @@ export class PuterProvider extends BaseProvider {
     }
   }
 
+  // ─── Capability Flags ─────────────────────────────────────────────
+
   override supportsTools(): boolean {
     return true;
   }
+
   override supportsVision(): boolean {
     return true;
   }
 
-  private buildDriverCall(req: AIRequest): Record<string, unknown> {
+  // ─── Streaming Chat ───────────────────────────────────────────────
+
+  async stream(req: AIRequest, onEvent: (event: AIStreamEvent) => void): Promise<void> {
+    await this.auth.ensureToken();
+
+    if (!req.model) {
+      throw new ProviderError('not-configured', 'No Puter model selected.', 'Pick a model in the sidebar.');
+    }
+
+    // Build OpenAI-compatible request body
     const messages = [
       ...(req.system ? [{ role: 'system', content: req.system }] : []),
       ...req.messages.map((m) =>
@@ -76,92 +129,103 @@ export class PuterProvider extends BaseProvider {
       )
     ];
 
-    const args: Record<string, unknown> = {
-      messages,
+    const body: Record<string, unknown> = {
       model: req.model,
+      messages,
       stream: true,
+      stream_options: { include_usage: true },
       temperature: req.temperature ?? 0.2,
       max_tokens: req.maxTokens ?? 4096
     };
+
     if (req.tools?.length) {
-      args.tools = req.tools.map((tool) => ({
+      body.tools = req.tools.map((tool) => ({
         type: 'function',
         function: { name: tool.name, description: tool.description, parameters: tool.parameters }
       }));
+      body.tool_choice = 'auto';
     }
 
-    return { interface: 'puter-chat-completion', method: 'complete', args };
-  }
-
-  async stream(req: AIRequest, onEvent: (event: AIStreamEvent) => void): Promise<void> {
-    await this.auth.ensureToken();
-    if (!req.model) {
-      throw new ProviderError('not-configured', 'No Puter model selected.', 'Pick a model in the sidebar.');
-    }
-
+    // Send to the OpenAI-compatible chat/completions endpoint
     let response: Response;
     try {
-      response = await request(joinUrl(this.auth.apiBase, '/drivers/call'), {
-        method: 'POST',
-        headers: this.auth.authHeaders(),
-        body: this.buildDriverCall(req),
-        signal: req.signal,
-        timeoutMs: 0x7fffffff
-      });
+      response = await request(
+        joinUrl(this.auth.openaiBase, '/chat/completions'),
+        {
+          method: 'POST',
+          headers: this.auth.authHeaders(),
+          body,
+          signal: req.signal,
+          timeoutMs: 0x7fffffff
+        }
+      );
     } catch (error) {
       throw PuterErrorMapper.map(error);
     }
 
+    // Parse SSE stream — identical to the OpenAI wire format
     const pending = new Map<number, { id: string; name: string; args: string }>();
     let finish: 'stop' | 'length' | 'tool_call' | 'aborted' = 'stop';
-    let sawAnything = false;
 
-    for await (const raw of readLines(response, req.signal)) {
-      const line = raw.startsWith('data:') ? raw.slice(5).trim() : raw.trim();
-      if (!line || line === '[DONE]') {
+    for await (const line of readLines(response, req.signal)) {
+      if (!line.startsWith('data:')) {
         continue;
       }
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') {
+        break;
+      }
 
-      let event: any;
+      let chunk: ChatChunk;
       try {
-        event = JSON.parse(line);
+        chunk = JSON.parse(payload) as ChatChunk;
       } catch {
-        // Some deployments emit bare text chunks.
-        sawAnything = true;
-        onEvent({ type: 'text', delta: raw });
         continue;
       }
 
-      if (event.success === false || event.error) {
-        throw PuterErrorMapper.map(event.error ?? event);
-      }
-
-      const delta = PuterProvider.extractText(event);
-      if (delta) {
-        sawAnything = true;
-        onEvent({ type: 'text', delta });
-      }
-
-      for (const call of PuterProvider.extractToolCallChunks(event)) {
-        const index = call.index;
-        const existing = pending.get(index) ?? { id: call.id ?? `call-${index}`, name: '', args: '' };
-        if (call.id) existing.id = call.id;
-        if (call.name) existing.name = call.name;
-        if (call.arguments) existing.args += call.arguments;
-        pending.set(index, existing);
-        finish = 'tool_call';
-      }
-
-      const usage = event.usage ?? event.result?.usage;
-      if (usage) {
+      // Usage
+      if (chunk.usage) {
         onEvent({
           type: 'usage',
-          promptTokens: usage.prompt_tokens ?? usage.input_tokens,
-          completionTokens: usage.completion_tokens ?? usage.output_tokens
+          promptTokens: chunk.usage.prompt_tokens,
+          completionTokens: chunk.usage.completion_tokens
         });
+      }
+
+      const choice = chunk.choices?.[0];
+      if (!choice) {
+        continue;
+      }
+
+      // Reasoning content (extended thinking)
+      if (choice.delta?.reasoning_content) {
+        onEvent({ type: 'reasoning', delta: choice.delta.reasoning_content });
+      }
+
+      // Text content
+      if (choice.delta?.content) {
+        onEvent({ type: 'text', delta: choice.delta.content });
+      }
+
+      // Tool calls
+      for (const call of choice.delta?.tool_calls ?? []) {
+        const index = call.index ?? 0;
+        const existing = pending.get(index) ?? { id: call.id ?? `call-${index}`, name: '', args: '' };
+        if (call.id) existing.id = call.id;
+        if (call.function?.name) existing.name = call.function.name;
+        if (call.function?.arguments) existing.args += call.function.arguments;
+        pending.set(index, existing);
+      }
+
+      // Finish reason
+      if (choice.finish_reason === 'tool_calls') {
+        finish = 'tool_call';
+      } else if (choice.finish_reason === 'length') {
+        finish = 'length';
       }
     }
 
+    // Emit accumulated tool calls
     for (const call of pending.values()) {
       let args: Record<string, unknown> = {};
       try {
@@ -173,50 +237,10 @@ export class PuterProvider extends BaseProvider {
       finish = 'tool_call';
     }
 
-    if (!sawAnything && finish === 'stop' && pending.size === 0) {
-      throw new ProviderError(
-        'bad-response',
-        'Puter returned an empty response.',
-        'Try a different model, or check the account has AI credit.'
-      );
-    }
     if (req.signal?.aborted) {
       finish = 'aborted';
     }
+
     onEvent({ type: 'done', finishReason: finish });
-  }
-
-  /** Puter wraps several upstream shapes; check each known position. */
-  private static extractText(event: any): string {
-    return (
-      event.text ??
-      event.delta?.text ??
-      event.result?.message?.content?.[0]?.text ??
-      event.message?.content?.[0]?.text ??
-      (typeof event.result?.message?.content === 'string' ? event.result.message.content : undefined) ??
-      event.choices?.[0]?.delta?.content ??
-      ''
-    );
-  }
-
-  private static extractToolCallChunks(event: any): { index: number; id?: string; name?: string; arguments?: string }[] {
-    const raw =
-      event.tool_calls ??
-      event.message?.tool_calls ??
-      event.result?.message?.tool_calls ??
-      event.choices?.[0]?.delta?.tool_calls ??
-      [];
-    const out = [];
-    for (let i = 0; i < (raw as any[]).length; i++) {
-      const call = raw[i];
-      const args = call.function?.arguments ?? call.input ?? '';
-      out.push({
-        index: call.index ?? i,
-        id: call.id,
-        name: call.function?.name ?? call.name,
-        arguments: typeof args === 'string' ? args : JSON.stringify(args)
-      });
-    }
-    return out;
   }
 }

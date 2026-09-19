@@ -11,7 +11,12 @@ export type ContextSource =
   | 'symbol'
   | 'project-config'
   | 'documentation'
-  | 'workspace-map';
+  | 'workspace-map'
+  | 'memory'
+  | 'semantic'
+  | 'image'
+  | 'mcp'
+  | 'browser';
 
 /** Priority order from the spec. Lower wins when the budget is tight. */
 export const SOURCE_PRIORITY: Record<ContextSource, number> = {
@@ -24,7 +29,12 @@ export const SOURCE_PRIORITY: Record<ContextSource, number> = {
   'project-config': 7,
   documentation: 8,
   problems: 2.5,
-  'workspace-map': 0
+  'workspace-map': 0,
+  memory: 1.5,
+  semantic: 4.5,
+  image: 1.1,
+  mcp: 1.2,
+  browser: 1.3
 };
 
 export interface ContextPiece {

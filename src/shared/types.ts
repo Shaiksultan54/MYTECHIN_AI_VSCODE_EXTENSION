@@ -3,7 +3,7 @@
  * Nothing in this file may import `vscode` — the webview bundles it too.
  */
 
-export type AttachmentType = 'file' | 'folder' | 'selection' | 'problems' | 'terminal';
+export type AttachmentType = 'file' | 'folder' | 'selection' | 'problems' | 'terminal' | 'image';
 export type AttachmentStatus = 'pending' | 'loaded' | 'error';
 
 export interface ContextAttachment {
@@ -19,6 +19,24 @@ export interface ContextAttachment {
   error?: string;
   /** Set when the path matches a sensitive pattern such as .env or *.pem. */
   sensitive?: boolean;
+}
+
+export interface McpServerConfig {
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  disabled?: boolean;
+}
+
+export type McpServerState = 'connecting' | 'connected' | 'error' | 'disconnected';
+
+export interface McpServerStatusView {
+  id: string;
+  config: McpServerConfig;
+  state: McpServerState;
+  error?: string;
+  tools: { name: string; description: string }[];
 }
 
 export interface WorkspaceContext {
@@ -37,6 +55,12 @@ export interface WorkspaceSummary {
   sourceRoots: string[];
   testRoots: string[];
   indexed: boolean;
+}
+
+export interface MemoryEntry {
+  id: string;
+  category: 'rules' | 'architecture' | 'decisions' | 'knowledge';
+  content: string;
 }
 
 export type ToolRisk = 'safe' | 'ask' | 'strong';
@@ -100,15 +124,28 @@ export interface ContextSummaryView {
   droppedCount: number;
 }
 
+export interface ModelCapabilities {
+  text: boolean;
+  vision: boolean;
+  toolCalling: boolean;
+  streaming: boolean;
+  embeddings: boolean;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;
   contextWindow?: number;
   supportsTools?: boolean;
   supportsVision?: boolean;
+  capabilities?: ModelCapabilities;
+  /** True when the model is free (e.g. all Puter models under User-Pays). */
+  isFree?: boolean;
+  /** Upstream provider name (e.g. "anthropic", "openai"). */
+  provider?: string;
 }
 
-export type ProviderId = 'ollama' | 'puter' | 'openai' | 'anthropic' | 'openai-compatible';
+export type ProviderId = 'ollama' | 'puter' | 'openai' | 'anthropic' | 'openai-compatible' | 'gemini' | 'groq' | 'openrouter' | 'github';
 
 export type ProviderState = 'connected' | 'not-configured' | 'error' | 'checking';
 
@@ -145,6 +182,7 @@ export interface SettingsView {
   loggingLevel: string;
   terminalTimeout: number;
   warnOnSensitiveUpload: boolean;
+  mcpConfigPath?: string;
 }
 
 export interface ConversationSummary {

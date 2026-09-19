@@ -8,6 +8,7 @@ import type { WorkspaceScanner } from '../workspace/WorkspaceScanner.js';
 import { toRelative } from '../workspace/PathSecurity.js';
 import { Logger } from '../logging/Logger.js';
 import type { AttachmentManager } from './AttachmentManager.js';
+import type { SemanticSearchService } from '../search/SemanticSearchService.js';
 import { estimateTokens } from './ContextBudget.js';
 import type { ContextPiece, Intent } from './ContextTypes.js';
 
@@ -26,7 +27,8 @@ export class ContextCollector {
     private readonly reader: FileReader,
     private readonly searcher: FileSearcher,
     private readonly scanner: WorkspaceScanner,
-    private readonly attachments: AttachmentManager
+    private readonly attachments: AttachmentManager,
+    private readonly semanticSearch?: SemanticSearchService
   ) {}
 
   /** Tier 0: the lightweight workspace map. Always cheap, always included. */
@@ -326,6 +328,19 @@ export class ContextCollector {
         tokens: estimateTokens(body),
         reason: 'Matched your request'
       });
+    }
+
+    if (this.semanticSearch) {
+      for (const term of intent.searchTerms.slice(0, 2)) {
+        try {
+          const semanticResults = await this.semanticSearch.search(term, 10);
+          for (const res of semanticResults) {
+            fileScores.set(res.uriPath, (fileScores.get(res.uriPath) ?? 0) + res.score * 10);
+          }
+        } catch (e) {
+          // Ignore semantic search errors
+        }
+      }
     }
 
     const ranked = Array.from(fileScores)

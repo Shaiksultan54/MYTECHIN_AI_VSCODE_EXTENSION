@@ -14,6 +14,7 @@ export type WebviewMessage =
   | { type: 'attachSpecial'; kind: 'currentFile' | 'selection' | 'problems' | 'terminal' }
   | { type: 'attachUris'; uris: string[] }
   | { type: 'attachPastedCode'; text: string; language?: string }
+  | { type: 'attachDataUrl'; name: string; dataUrl: string; mimeType: string }
   | { type: 'removeAttachment'; attachmentId: string }
   | { type: 'clearAttachments' }
   | { type: 'approveTool'; requestId: string; approved: boolean; rememberForTask?: boolean }
@@ -31,7 +32,16 @@ export type WebviewMessage =
   | { type: 'restoreCheckpoint'; checkpointId: string }
   | { type: 'compareCheckpoint'; checkpointId: string }
   | { type: 'openExtensionSettings' }
-  | { type: 'showLogs' };
+  | { type: 'showLogs' }
+  | { type: 'addMcpServer'; config: import('../types.js').McpServerConfig }
+  | { type: 'removeMcpServer'; id: string }
+  | { type: 'toggleMcpServer'; id: string; disabled: boolean }
+  | { type: 'restartMcpServer'; id: string }
+  | { type: 'rebuildSemanticIndex' }
+  | { type: 'getMemory' }
+  | { type: 'addMemory'; category: string; content: string }
+  | { type: 'updateMemory'; id: string; content: string }
+  | { type: 'removeMemory'; id: string };
 
 export interface SettingsPatch {
   provider: ProviderId;

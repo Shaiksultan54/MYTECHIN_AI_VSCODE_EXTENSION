@@ -2,9 +2,13 @@ import type { ModelInfo, ProviderId, ProviderState } from '../../shared/types.js
 
 export type { ModelInfo, ProviderId };
 
+export type AIMessageContent = 
+  | string 
+  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
+
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  content: AIMessageContent;
   /** Present on `tool` messages so native tool-calling providers can match up results. */
   toolCallId?: string;
   name?: string;

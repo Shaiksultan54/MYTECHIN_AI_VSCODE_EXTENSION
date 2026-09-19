@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { ContextAttachment, MentionItem } from '../../../../src/shared/types.js';
 import { SLASH_COMMANDS } from '../../../../src/shared/constants/index.js';
+import { useDispatch } from '../../state/store.js';
 import { post } from '../../vscode.js';
 import { Icon } from '../Icon.js';
 import { AttachmentBar } from '../Attachments/AttachmentBar.js';
@@ -41,6 +42,7 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [popup, setPopup] = useState<{ query: string; requestId: string } | undefined>();
   const [highlight, setHighlight] = useState(0);
+  const dispatch = useDispatch();
   const input = useRef<HTMLTextAreaElement>(null);
   const debounce = useRef<number | undefined>(undefined);
 
@@ -114,6 +116,7 @@ export function Composer({
     post({ type: 'sendPrompt', text: command ? command.expand(slash?.[2] ?? '').trim() : trimmed });
     setText('');
     setPopup(undefined);
+    dispatch({ kind: 'setPanel', panel: 'chat' });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -161,6 +164,29 @@ export function Composer({
   };
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+    // Handle image paste
+    const items = event.clipboardData.items;
+    let hasImage = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        hasImage = true;
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+             const dataUrl = e.target?.result as string;
+             post({ type: 'attachDataUrl', name: `Pasted Image.png`, dataUrl, mimeType: blob.type });
+          };
+          reader.readAsDataURL(blob);
+        }
+      }
+    }
+    
+    if (hasImage) {
+      event.preventDefault();
+      return;
+    }
+
     const pasted = event.clipboardData.getData('text');
     // Long multi-line pastes become an attachment rather than flooding the box.
     if (pasted.split('\n').length > 12 && pasted.length > 400) {
@@ -172,6 +198,23 @@ export function Composer({
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
     setDragging(false);
+
+    // Handle dropping image files directly
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const files = Array.from(event.dataTransfer.files);
+      const images = files.filter(f => f.type.startsWith('image/'));
+      if (images.length > 0) {
+        for (const file of images) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+             const dataUrl = e.target?.result as string;
+             post({ type: 'attachDataUrl', name: file.name, dataUrl, mimeType: file.type });
+          };
+          reader.readAsDataURL(file);
+        }
+        return;
+      }
+    }
 
     const uriList =
       event.dataTransfer.getData('text/uri-list') ||
@@ -265,7 +308,10 @@ export function Composer({
         <button
           type="button"
           className="link-button"
-          onClick={() => post({ type: 'requestContext' })}
+          onClick={() => {
+            post({ type: 'requestContext' });
+            dispatch({ kind: 'setPanel', panel: 'context' });
+          }}
           title="See exactly what was sent to the model"
         >
           Context

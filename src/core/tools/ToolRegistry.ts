@@ -27,6 +27,10 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
+  unregister(name: string): boolean {
+    return this.tools.delete(name);
+  }
+
   has(name: string): boolean {
     return this.tools.has(name);
   }

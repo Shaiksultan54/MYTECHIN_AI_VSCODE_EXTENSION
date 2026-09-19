@@ -8,8 +8,9 @@ import {
   getSelectionTool,
   getTerminalOutputTool
 } from './editorTools.js';
-import { applyPatchTool, createFileTool, deleteFileTool, writeFileTool } from './writeTools.js';
+import { applyPatchTool, createFileTool, deleteFileTool, writeFileTool, multiApplyPatchTool } from './writeTools.js';
 import { runCommandTool } from './commandTools.js';
+import { webSearchTool, browsePageTool, extractContentTool } from '../../browser/BrowserTools.js';
 
 export const ALL_TOOLS: ToolDefinition[] = [
   readFileTool,
@@ -24,9 +25,13 @@ export const ALL_TOOLS: ToolDefinition[] = [
   openFileTool,
   openDiffTool,
   applyPatchTool,
+  multiApplyPatchTool,
   writeFileTool,
   createFileTool,
   deleteFileTool,
   runCommandTool,
-  askUserTool
+  askUserTool,
+  webSearchTool,
+  browsePageTool,
+  extractContentTool
 ];

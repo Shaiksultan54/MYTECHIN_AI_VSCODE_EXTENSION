@@ -56,6 +56,8 @@ export function attachmentIcon(attachment: ContextAttachment): string {
       return 'warning';
     case 'terminal':
       return 'terminal';
+    case 'image':
+      return 'file-media';
     default:
       return 'file-code';
   }

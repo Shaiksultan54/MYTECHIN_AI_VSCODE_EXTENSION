@@ -95,6 +95,12 @@ const BINARY_EXTENSIONS = new Set([
   '.db', '.sqlite', '.sqlite3', '.mdb', '.bak', '.dat'
 ]);
 
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+
+export function isImage(p: string): boolean {
+  return IMAGE_EXTENSIONS.has(path.extname(p).toLowerCase());
+}
+
 export function isLikelyBinary(p: string): boolean {
   return BINARY_EXTENSIONS.has(path.extname(p).toLowerCase());
 }

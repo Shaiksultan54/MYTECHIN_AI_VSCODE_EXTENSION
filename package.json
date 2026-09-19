@@ -28,6 +28,7 @@
   "icon": "media/icon.png",
   "main": "./dist/extension.js",
   "activationEvents": [
+    "onView:mytechin.chat",
     "onStartupFinished"
   ],
   "contributes": {
@@ -136,6 +137,21 @@
       {
         "command": "mytechin.showLogs",
         "title": "Show Logs",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.showMemory",
+        "title": "Show Memory",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.addMemory",
+        "title": "Add Memory",
+        "category": "Mytechin AI"
+      },
+      {
+        "command": "mytechin.clearMemory",
+        "title": "Clear Memory",
         "category": "Mytechin AI"
       }
     ],
@@ -280,7 +296,11 @@
             "puter",
             "openai",
             "anthropic",
-            "openai-compatible"
+            "openai-compatible",
+            "gemini",
+            "groq",
+            "openrouter",
+            "github"
           ],
           "default": "ollama",
           "description": "Active AI provider."
@@ -406,6 +426,16 @@
           "type": "boolean",
           "default": true,
           "description": "Warn before sending secrets or credential files to a cloud provider."
+        },
+        "mytechin.mcpConfigPath": {
+          "type": "string",
+          "default": ".mytechin/mcp.json",
+          "description": "Path to the Model Context Protocol configuration file (relative to workspace root)."
+        },
+        "mytechin.debug.puter": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log safe Puter request metadata (model, latency, tool count) to the output channel."
         }
       }
     }
@@ -417,22 +447,27 @@
     "build": "npm run build:webview && npm run build:extension",
     "watch:extension": "node esbuild.mjs --watch",
     "watch:webview": "npm --prefix webview-ui run dev",
+    "serve:webview": "npm --prefix webview-ui run serve",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm --prefix webview-ui run typecheck",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\" \"webview-ui/src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository -o mytechin-ai.vsix",
+    "package": "npm run build && vsce package --allow-missing-repository -o mytechin-ai.vsix",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "diff": "^5.2.0",
-    "ignore": "^5.3.2"
+    "ignore": "^5.3.2",
+    "playwright-core": "^1.63.0",
+    "turndown": "^7.2.4"
   },
   "devDependencies": {
     "@types/diff": "^5.2.3",
     "@types/node": "^20.14.0",
+    "@types/turndown": "^5.0.6",
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",

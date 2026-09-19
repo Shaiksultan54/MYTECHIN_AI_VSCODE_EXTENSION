@@ -4,7 +4,7 @@ import { MAX_ATTACHMENT_BYTES } from '../../shared/constants/index.js';
 import type { ContextAttachment } from '../../shared/types.js';
 import type { WorkspaceManager } from '../workspace/WorkspaceManager.js';
 import type { FileReader } from '../workspace/FileReader.js';
-import { PathSecurityError, isLikelyBinary } from '../workspace/PathSecurity.js';
+import { PathSecurityError, isLikelyBinary, isImage } from '../workspace/PathSecurity.js';
 import { Logger } from '../logging/Logger.js';
 
 export interface PastedSnippet {
@@ -72,6 +72,21 @@ export class AttachmentManager {
             status: 'loaded',
             sizeBytes: entries.length,
             sensitive: false
+          });
+          added++;
+          continue;
+        }
+
+        if (isImage(resolved.fsPath)) {
+          const metadata = await this.reader.metadata(resolved).catch(() => undefined);
+          this.push({
+            id: randomUUID(),
+            type: 'image',
+            uri: resolved.uri.toString(),
+            relativePath: resolved.relativePath,
+            sizeBytes: metadata?.sizeBytes ?? 0,
+            status: 'loaded',
+            sensitive: resolved.sensitive
           });
           added++;
           continue;
@@ -188,6 +203,19 @@ export class AttachmentManager {
       lineStart: 1,
       lineEnd: lines,
       sizeBytes: Buffer.byteLength(text, 'utf8'),
+      status: 'loaded'
+    });
+    this.onChanged();
+  }
+
+  addDataUrl(name: string, dataUrl: string, mimeType: string): void {
+    const size = Buffer.byteLength(dataUrl, 'utf8');
+    this.push({
+      id: randomUUID(),
+      type: 'image',
+      uri: dataUrl,
+      relativePath: name,
+      sizeBytes: size,
       status: 'loaded'
     });
     this.onChanged();

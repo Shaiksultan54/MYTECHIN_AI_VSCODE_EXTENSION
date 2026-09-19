@@ -93,20 +93,46 @@ export function ModelSelector({ providers, models, provider, model }: ModelSelec
                 No models. {active?.requiresSecret && !active.hasSecret ? 'Add a credential in Settings.' : 'Check the provider connection.'}
               </p>
             ) : (
-              filtered.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={item.id === model ? 'menu-item-active' : undefined}
-                  onClick={() => {
-                    post({ type: 'selectModel', modelId: item.id });
-                    setOpen(false);
-                  }}
-                >
-                  <span className="model-list-name">{item.name}</span>
-                  {item.supportsTools ? <Icon name="tools" title="Supports tool calling" /> : null}
-                </button>
-              ))
+              <>
+                {filtered.filter((m) => m.isFree).length > 0 && (
+                  <>
+                    <div className="model-group-header">FREE VIA PUTER</div>
+                    {filtered.filter((m) => m.isFree).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={item.id === model ? 'menu-item-active' : undefined}
+                        onClick={() => {
+                          post({ type: 'selectModel', modelId: item.id });
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="model-list-name">{item.name}</span>
+                        {item.supportsTools ? <Icon name="tools" title="Supports tool calling" /> : null}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {filtered.filter((m) => !m.isFree).length > 0 && (
+                  <>
+                    {filtered.filter((m) => m.isFree).length > 0 && <div className="model-group-header">OTHER</div>}
+                    {filtered.filter((m) => !m.isFree).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={item.id === model ? 'menu-item-active' : undefined}
+                        onClick={() => {
+                          post({ type: 'selectModel', modelId: item.id });
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="model-list-name">{item.name}</span>
+                        {item.supportsTools ? <Icon name="tools" title="Supports tool calling" /> : null}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
 
