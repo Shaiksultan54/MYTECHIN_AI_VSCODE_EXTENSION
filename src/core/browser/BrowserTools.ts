@@ -1,6 +1,6 @@
 import { TOOL_RISK } from '../../shared/schemas/tools.js';
 import type { ToolDefinition } from '../tools/ToolTypes.js';
-import { fail, ok, requireString, optionalString } from '../tools/ToolTypes.js';
+import { fail, ok, requireString } from '../tools/ToolTypes.js';
 import { ContentExtractor } from './ContentExtractor.js';
 
 const extractor = new ContentExtractor();

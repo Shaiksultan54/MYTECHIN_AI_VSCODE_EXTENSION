@@ -174,6 +174,7 @@ export class ExtensionController implements vscode.Disposable {
       provider: () => this.providers.active(),
       registry: this.registry,
       executor: this.executor,
+      workspace: this.workspace,
       conversations: this.conversations,
       attachments: this.attachments,
       vision: visionAdapter,
@@ -617,7 +618,8 @@ export class ExtensionController implements vscode.Disposable {
       gemini: 'Google Gemini API key',
       groq: 'Groq API key',
       openrouter: 'OpenRouter API key',
-      github: 'GitHub Personal Access Token (for GitHub Models)'
+      github: 'GitHub Personal Access Token (for GitHub Models)',
+      omniroute: 'OmniRoute API key (optional — leave empty for local gateway)'
     };
 
     const value = await vscode.window.showInputBox({

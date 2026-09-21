@@ -16,7 +16,7 @@ export interface Conversation {
 
 export interface ModelTurn {
   role: 'user' | 'assistant' | 'tool';
-  content: string;
+  content: import('../providers/ProviderTypes.js').AIMessageContent;
   toolCallId?: string;
   name?: string;
 }

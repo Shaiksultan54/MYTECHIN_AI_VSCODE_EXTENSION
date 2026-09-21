@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
-import { Logger } from '../../logging/Logger.js';
+import { Logger } from '../logging/Logger.js';
 
 export class BrowserService implements vscode.Disposable {
   private browser: Browser | undefined;
@@ -26,7 +26,7 @@ export class BrowserService implements vscode.Disposable {
       this.isAvailable = true;
       return true;
     } catch (e) {
-      this.logger.warn('BrowserService', 'Chromium is not available', e);
+      this.logger.error('BrowserService: Failed to launch browser', e);
       this.isAvailable = false;
       
       const install = await vscode.window.showInformationMessage(

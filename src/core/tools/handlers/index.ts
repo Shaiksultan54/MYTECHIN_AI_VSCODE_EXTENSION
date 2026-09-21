@@ -11,6 +11,13 @@ import {
 import { applyPatchTool, createFileTool, deleteFileTool, writeFileTool, multiApplyPatchTool } from './writeTools.js';
 import { runCommandTool } from './commandTools.js';
 import { webSearchTool, browsePageTool, extractContentTool } from '../../browser/BrowserTools.js';
+import {
+  getDocumentSymbolsTool,
+  getWorkspaceSymbolsTool,
+  getDefinitionTool,
+  getReferencesTool,
+  getHoverTool
+} from './lspTools.js';
 
 export const ALL_TOOLS: ToolDefinition[] = [
   readFileTool,
@@ -22,6 +29,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   getSelectionTool,
   getProblemsTool,
   getTerminalOutputTool,
+  getDocumentSymbolsTool,
+  getWorkspaceSymbolsTool,
+  getDefinitionTool,
+  getReferencesTool,
+  getHoverTool,
   openFileTool,
   openDiffTool,
   applyPatchTool,

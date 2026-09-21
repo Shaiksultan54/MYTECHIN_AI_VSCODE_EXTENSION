@@ -89,10 +89,21 @@ export class AnthropicProvider extends BaseProvider {
     for (const m of req.messages) {
       if (m.role === 'system') continue;
 
-      if (m.role === 'assistant') {
-        const match = /<tool\s+name=["']?([^"'>]+)["']?>\n([\s\S]*?)\n<\/tool>/.exec(m.content);
+      let textContent = '';
+      if (typeof m.content === 'string') {
+        textContent = m.content;
+      } else if (Array.isArray(m.content)) {
+        for (const part of m.content) {
+          if (part.type === 'text') {
+            textContent += part.text + '\n';
+          }
+        }
+      }
+
+      if (m.role === 'assistant' && this.supportsTools()) {
+        const match = /<tool\s+name=["']?([^"'>]+)["']?>\n([\s\S]*?)\n<\/tool>/.exec(textContent);
         if (match) {
-          const text = m.content.slice(0, match.index).trim();
+          const text = textContent.slice(0, match.index).trim();
           const name = match[1];
           let input = {};
           try {

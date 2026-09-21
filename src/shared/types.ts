@@ -145,7 +145,7 @@ export interface ModelInfo {
   provider?: string;
 }
 
-export type ProviderId = 'ollama' | 'puter' | 'openai' | 'anthropic' | 'openai-compatible' | 'gemini' | 'groq' | 'openrouter' | 'github';
+export type ProviderId = 'ollama' | 'puter' | 'openai' | 'anthropic' | 'openai-compatible' | 'gemini' | 'groq' | 'openrouter' | 'github' | 'omniroute';
 
 export type ProviderState = 'connected' | 'not-configured' | 'error' | 'checking';
 
@@ -169,6 +169,7 @@ export interface SettingsView {
   openaiCompatibleBaseUrl: string;
   openaiCompatibleOrganization: string;
   puterBaseUrl: string;
+  omniRouteBaseUrl?: string;
   approvalMode: ApprovalMode;
   autoApproveSafeTools: boolean;
   maxToolIterations: number;
@@ -224,4 +225,13 @@ export type AgentPhase =
   | 'running-tool'
   | 'verifying'
   | 'done'
-  | 'error';
+  | 'error'
+  | 'planning'
+  | 'discovery'
+  | 'implementation'
+  | 'validation'
+  | 'repair'
+  | 'review'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';

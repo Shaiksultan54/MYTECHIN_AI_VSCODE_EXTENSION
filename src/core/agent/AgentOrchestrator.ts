@@ -18,7 +18,7 @@ import type { AgentEventSink } from './AgentEvents.js';
 import { AgentState } from './AgentState.js';
 import { ToolCallParser } from './ToolCallParser.js';
 
-export interface AgentLoopDeps {
+export interface AgentOrchestratorDeps {
   provider: () => Promise<AIProvider>;
   registry: ToolRegistry;
   executor: ToolExecutor;
@@ -26,6 +26,7 @@ export interface AgentLoopDeps {
   context: ContextManager;
   attachments: AttachmentManager;
   vision: VisionAdapter;
+  memory: import('../memory/MemoryRetriever.js').MemoryRetriever;
   settings: SettingsStore;
   checkpoints: CheckpointManager;
   events: AgentEventSink;
@@ -38,11 +39,11 @@ export interface AgentLoopDeps {
  * stops it. Every exit path is bounded — iterations, cancellation, repeated
  * calls and provider errors all terminate cleanly.
  */
-export class AgentLoop {
+export class AgentOrchestrator {
   private readonly systemPrompt = new SystemPromptBuilder();
   private readonly taskPrompt = new TaskPromptBuilder();
 
-  constructor(private readonly deps: AgentLoopDeps) {}
+  constructor(private readonly deps: AgentOrchestratorDeps) {}
 
   async run(userPrompt: string, token: vscode.CancellationToken): Promise<void> {
     const { conversations, events, state, settings } = this.deps;
@@ -171,7 +172,7 @@ export class AgentLoop {
         conversations.addModelTurn({
           role: 'tool',
           name: turn.call.name,
-          content: AgentLoop.renderToolResult(result)
+          content: AgentOrchestrator.renderToolResult(result)
         });
 
         // Re-prime the task section so the model keeps the goal in view.
@@ -344,7 +345,7 @@ export class AgentLoop {
     view.summary = execution.result.summary;
     view.error = execution.result.error;
     view.endedAt = Date.now();
-    view.output = AgentLoop.previewOutput(execution.result.output);
+    view.output = AgentOrchestrator.previewOutput(execution.result.output);
 
     conversations.upsertToolCall(message.id, view);
     events.emit({ type: 'toolCompleted', messageId: message.id, call: view });

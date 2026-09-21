@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Logger } from '../../logging/Logger.js';
+import { Logger } from '../logging/Logger.js';
 import type { MemoryEntry } from '../../shared/types.js';
 
 export class ProjectMemoryService {

@@ -49,7 +49,8 @@ export class ApprovalManager implements vscode.Disposable {
       return { approved: true, automatic: true };
     }
 
-    if (this.policy.decide(risk) === 'auto-approve') {
+    const category = this.policy.categoryForTool(options.toolName);
+    if (this.policy.decide(risk, category) === 'auto-approve') {
       return { approved: true, automatic: true };
     }
 

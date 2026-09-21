@@ -50,6 +50,7 @@ export interface SettingsPatch {
   openaiCompatibleBaseUrl: string;
   openaiCompatibleOrganization: string;
   puterBaseUrl: string;
+  omniRouteBaseUrl?: string;
   approvalMode: ApprovalMode;
   autoApproveSafeTools: boolean;
   maxToolIterations: number;

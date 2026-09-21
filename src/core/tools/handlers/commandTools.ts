@@ -1,5 +1,6 @@
-import { DESTRUCTIVE_COMMAND_PATTERNS, TOOL_RISK } from '../../../shared/schemas/tools.js';
+import { TOOL_RISK } from '../../../shared/schemas/tools.js';
 import { fail, ok, optionalString, requireString, type ToolDefinition } from '../ToolTypes.js';
+import { CommandPolicy } from '../../terminal/CommandPolicy.js';
 
 export const runCommandTool: ToolDefinition = {
   name: 'run_command',
@@ -20,17 +21,38 @@ export const runCommandTool: ToolDefinition = {
     const command = requireString(input, 'command', 'run_command');
     const cwd = optionalString(input, 'cwd');
     const resolvedCwd = cwd ? ctx.workspace.resolve(cwd) : undefined;
-    const destructive = DESTRUCTIVE_COMMAND_PATTERNS.some((p) => p.test(command));
+    const classification = CommandPolicy.classify(command);
+
+    let riskOverride: import('../../../shared/types.js').ToolRisk | undefined;
+    if (classification.level === 'block' || classification.isDestructive) {
+      riskOverride = 'strong';
+    } else if (classification.level === 'allow') {
+      riskOverride = 'safe';
+    }
+
+    const why = optionalString(input, 'reason') ?? classification.reason;
+    const detail = `[${classification.category}] ${why}\nWhere: ${resolvedCwd?.relativePath ?? '.'}\nRisk: ${classification.level.toUpperCase()}${classification.isDestructive ? ' (Destructive)' : ''}`;
+
     return {
-      title: destructive ? 'Run this command — it can destroy data' : 'Run this command',
-      detail: optionalString(input, 'reason'),
+      title: classification.level === 'block'
+        ? `Blocked command — ${classification.reason}`
+        : classification.isDestructive
+          ? 'Run this command — it can alter or delete data'
+          : `Run ${classification.category.toLowerCase()} command`,
+      detail,
       command,
       cwd: resolvedCwd?.relativePath ?? '.',
-      riskOverride: destructive ? 'strong' : undefined
+      riskOverride
     };
   },
   async execute(input, ctx) {
     const command = requireString(input, 'command', 'run_command');
+    const classification = CommandPolicy.classify(command);
+
+    if (classification.level === 'block') {
+      return fail('run_command', `Command blocked by security policy: ${classification.reason}`);
+    }
+
     const roots = ctx.workspace.rootPaths();
     if (roots.length === 0) {
       return fail('run_command', 'No workspace folder is open, so there is nowhere to run the command.');

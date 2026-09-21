@@ -13,6 +13,7 @@ import { GeminiProvider } from './gemini/GeminiProvider.js';
 import { GroqProvider } from './groq/GroqProvider.js';
 import { OpenRouterProvider } from './openrouter/OpenRouterProvider.js';
 import { GitHubProvider } from './github/GitHubProvider.js';
+import { OmniRouteProvider } from './omniroute/OmniRouteProvider.js';
 import { ProviderError, type ProviderStatus } from './ProviderTypes.js';
 
 /**
@@ -31,6 +32,7 @@ export class ProviderManager implements vscode.Disposable {
     private readonly secrets: SecretStore
   ) {
     this.providers.set('ollama', new OllamaProvider());
+    this.providers.set('omniroute', new OmniRouteProvider());
     this.providers.set('puter', new PuterProvider());
     this.providers.set('openai', new OpenAIProvider());
     this.providers.set('anthropic', new AnthropicProvider());
@@ -41,7 +43,7 @@ export class ProviderManager implements vscode.Disposable {
     this.providers.set('github', new GitHubProvider());
 
     for (const id of this.providers.keys()) {
-      this.statuses.set(id, { state: id === 'ollama' || id === 'puter' ? 'checking' : 'not-configured' });
+      this.statuses.set(id, { state: id === 'ollama' || id === 'puter' || id === 'omniroute' ? 'checking' : 'not-configured' });
     }
   }
 
@@ -84,6 +86,12 @@ export class ProviderManager implements vscode.Disposable {
         provider.configure({
           baseUrl: s.openaiCompatibleBaseUrl,
           organization: s.openaiCompatibleOrganization,
+          apiKey
+        });
+        break;
+      case 'omniroute':
+        provider.configure({
+          baseUrl: s.omniRouteBaseUrl,
           apiKey
         });
         break;

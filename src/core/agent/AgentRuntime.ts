@@ -12,13 +12,14 @@ import type { CheckpointManager } from '../checkpoints/CheckpointManager.js';
 import type { ApprovalManager } from '../approval/ApprovalManager.js';
 import { Logger } from '../logging/Logger.js';
 import type { AgentEventSink } from './AgentEvents.js';
-import { AgentLoop } from './AgentLoop.js';
+import { AgentOrchestrator } from './AgentOrchestrator.js';
 import { AgentState } from './AgentState.js';
 
 export interface AgentRuntimeDeps {
   provider: () => Promise<AIProvider>;
   registry: ToolRegistry;
   executor: ToolExecutor;
+  workspace: import('../workspace/WorkspaceManager.js').WorkspaceManager;
   conversations: ConversationManager;
   context: ContextManager;
   attachments: AttachmentManager;
@@ -33,20 +34,23 @@ export interface AgentRuntimeDeps {
 
 /**
  * The public face of the agent. It owns task lifecycle — start, phase, stop —
- * and delegates the actual reasoning cycle to AgentLoop. Everything above this
+ * and delegates the actual reasoning cycle to AgentOrchestrator. Everything above this
  * class (controller, commands, webview) only ever calls `submit` and `stop`.
  */
 export class AgentRuntime implements vscode.Disposable {
   private readonly state: AgentState;
-  private readonly loop: AgentLoop;
+  private readonly orchestrator: AgentOrchestrator;
   private active: Promise<void> | undefined;
 
   constructor(private readonly deps: AgentRuntimeDeps) {
-    this.state = new AgentState((phase, label) => {
-      this.deps.events.emit({ type: 'phaseChanged', phase, label });
-    });
+    this.state = new AgentState(
+      (phase, label) => {
+        this.deps.events.emit({ type: 'phaseChanged', phase, label });
+      },
+      deps.workspace.rootPaths()[0] || ''
+    );
 
-    this.loop = new AgentLoop({
+    this.orchestrator = new AgentOrchestrator({
       provider: deps.provider,
       registry: deps.registry,
       executor: deps.executor,
@@ -98,10 +102,10 @@ export class AgentRuntime implements vscode.Disposable {
     this.deps.approvals.resetTaskMemory();
     this.deps.conversations.clearTaskMemory();
 
-    const token = this.state.start();
+    const token = this.state.start(text);
     this.setRunningContext(true);
 
-    this.active = this.loop
+    this.active = this.orchestrator
       .run(text, token)
       .catch((error: unknown) => {
         Logger.get().error('Agent task failed outside the loop', error);

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Logger } from '../../logging/Logger.js';
+import { Logger } from '../logging/Logger.js';
 
 export interface CodeChunk {
   id: string; // e.g. "path/to/file.ts#ClassName.methodName"
@@ -32,7 +32,7 @@ export class CodeChunker {
         this.fallbackChunk(uri, content, chunks);
       }
     } catch (e) {
-      this.logger.warn('CodeChunker', `Failed to get symbols for ${uri.fsPath}. Falling back.`, e);
+      this.logger.error(`CodeChunker: Failed to chunk ${uri.fsPath}`, e);
       this.fallbackChunk(uri, content, chunks);
     }
 

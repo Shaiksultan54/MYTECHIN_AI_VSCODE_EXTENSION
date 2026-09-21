@@ -92,24 +92,6 @@ export class OllamaProvider extends BaseProvider {
 
     const messages: any[] = req.system ? [{ role: 'system', content: req.system }] : [];
     for (const m of req.messages) {
-      if (m.role === 'assistant' && this.toolCapable) {
-        const match = /<tool\s+name=["']?([^"'>]+)["']?>\n([\s\S]*?)\n<\/tool>/.exec(m.content);
-        if (match) {
-          const text = m.content.slice(0, match.index).trim();
-          let args = {};
-          try {
-            args = JSON.parse(match[2] || '{}');
-          } catch {
-            args = { _raw: match[2] };
-          }
-          messages.push({
-            role: 'assistant',
-            content: text,
-            tool_calls: [{ function: { name: match[1], arguments: args } }]
-          });
-          continue;
-        }
-      }
       let contentString = '';
       let images: string[] = [];
 
@@ -126,6 +108,25 @@ export class OllamaProvider extends BaseProvider {
         }
       } else {
         contentString = m.content;
+      }
+
+      if (m.role === 'assistant' && this.toolCapable) {
+        const match = /<tool\s+name=["']?([^"'>]+)["']?>\n([\s\S]*?)\n<\/tool>/.exec(contentString);
+        if (match) {
+          const text = contentString.slice(0, match.index).trim();
+          let args = {};
+          try {
+            args = JSON.parse(match[2] || '{}');
+          } catch {
+            args = { _raw: match[2] };
+          }
+          messages.push({
+            role: 'assistant',
+            content: text,
+            tool_calls: [{ function: { name: match[1], arguments: args } }]
+          });
+          continue;
+        }
       }
 
       const msg: any = {

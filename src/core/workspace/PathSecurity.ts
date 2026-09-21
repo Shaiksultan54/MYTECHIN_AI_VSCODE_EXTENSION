@@ -22,11 +22,15 @@ export function normalize(p: string): string {
 
 /** True when `child` is inside `root` (or is `root` itself). */
 export function isInside(root: string, child: string): boolean {
-  const relative = path.relative(normalize(root), normalize(child));
+  const normRoot = normalize(root);
+  const normChild = normalize(child);
+  const isPosix = normRoot.startsWith('/') && !/^[A-Za-z]:/.test(normRoot);
+  const p = isPosix ? path.posix : path;
+  const relative = p.relative(normRoot, normChild);
   if (relative === '') {
     return true;
   }
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
+  return !relative.startsWith('..') && !p.isAbsolute(relative);
 }
 
 /**
@@ -42,9 +46,11 @@ export function resolveWithinRoots(roots: string[], candidate: string): string {
   }
 
   const cleaned = candidate.trim().replace(/^["']|["']$/g, '');
+  const isPosix = roots.every((r) => r.startsWith('/') && !/^[A-Za-z]:/.test(r));
+  const p = isPosix ? path.posix : path;
 
-  if (path.isAbsolute(cleaned) || /^[A-Za-z]:[\\/]/.test(cleaned)) {
-    const absolute = path.resolve(cleaned);
+  if (p.isAbsolute(cleaned) || /^[A-Za-z]:[\\/]/.test(cleaned)) {
+    const absolute = p.resolve(cleaned);
     const root = roots.find((r) => isInside(r, absolute));
     if (!root) {
       throw new PathSecurityError(
@@ -57,7 +63,7 @@ export function resolveWithinRoots(roots: string[], candidate: string): string {
   // Relative: try each root, first hit wins. Callers that need a specific root
   // pass a single-element array.
   for (const root of roots) {
-    const absolute = path.resolve(root, cleaned);
+    const absolute = p.resolve(root, cleaned);
     if (isInside(root, absolute)) {
       return normalize(absolute);
     }
@@ -72,7 +78,11 @@ export function resolveWithinRoots(roots: string[], candidate: string): string {
 export function toRelative(roots: string[], absolute: string): string {
   for (const root of roots) {
     if (isInside(root, absolute)) {
-      const relative = path.relative(normalize(root), normalize(absolute));
+      const normRoot = normalize(root);
+      const normAbs = normalize(absolute);
+      const isPosix = normRoot.startsWith('/') && !/^[A-Za-z]:/.test(normRoot);
+      const p = isPosix ? path.posix : path;
+      const relative = p.relative(normRoot, normAbs);
       return relative === '' ? path.basename(root) : relative.replace(/\\/g, '/');
     }
   }

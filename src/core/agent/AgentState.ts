@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
 import type { AgentPhase } from '../../shared/types.js';
 
 const PHASE_LABEL: Record<AgentPhase, string> = {
@@ -6,26 +7,97 @@ const PHASE_LABEL: Record<AgentPhase, string> = {
   analyzing: 'Analyzing request',
   'building-context': 'Gathering context',
   'waiting-for-model': 'Thinking',
-  streaming: 'Responding',
-  'awaiting-approval': 'Waiting for your approval',
-  'running-tool': 'Running tool',
   verifying: 'Verifying the change',
   done: 'Completed',
-  error: 'Stopped'
+  error: 'Stopped',
+  planning: 'Planning execution',
+  discovery: 'Discovering context',
+  implementation: 'Implementing changes',
+  validation: 'Validating changes',
+  repair: 'Repairing errors',
+  review: 'Reviewing',
+  completed: 'Task completed',
+  failed: 'Task failed',
+  cancelled: 'Task cancelled',
+  streaming: 'Responding',
+  'awaiting-approval': 'Waiting for your approval',
+  'running-tool': 'Running tool'
 };
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface AgentStateData {
+  taskId: string;
+  sessionId: string;
+  workspaceRoot: string;
+  phase: AgentPhase;
+  userRequest: string;
+  plan?: string;
+  currentStep?: string;
+  messages: any[];
+  toolCalls: any[];
+  toolResults: any[];
+  changedFiles: string[];
+  diagnostics: any[];
+  tests: any[];
+  buildResults: any[];
+  retries: number;
+  tokenUsage: TokenUsage;
+  estimatedCost: number;
+  selectedModel: string;
+  provider: string;
+  errors: string[];
+  approvals: any[];
+  createdAt: number;
+  updatedAt: number;
+}
 
 /**
  * Tracks whether a task is running, the current phase, and the cancellation
- * token that every operation in the task hangs off.
+ * token that every operation in the task hangs off. 
+ * Provides a structured state machine for the agent runtime.
  */
 export class AgentState {
   private source: vscode.CancellationTokenSource | undefined;
-  private phase: AgentPhase = 'idle';
   private iterations = 0;
+  
+  public data: AgentStateData;
+
   /** Signature of each executed tool call, to catch the model looping. */
   private readonly signatures: string[] = [];
 
-  constructor(private readonly onPhase: (phase: AgentPhase, label: string) => void) {}
+  constructor(
+    private readonly onPhase: (phase: AgentPhase, label: string) => void,
+    workspaceRoot: string,
+    sessionId: string = randomUUID()
+  ) {
+    this.data = {
+      taskId: randomUUID(),
+      sessionId,
+      workspaceRoot,
+      phase: 'idle',
+      userRequest: '',
+      messages: [],
+      toolCalls: [],
+      toolResults: [],
+      changedFiles: [],
+      diagnostics: [],
+      tests: [],
+      buildResults: [],
+      retries: 0,
+      tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      estimatedCost: 0,
+      selectedModel: '',
+      provider: '',
+      errors: [],
+      approvals: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  }
 
   get running(): boolean {
     return this.source !== undefined;
@@ -36,28 +108,60 @@ export class AgentState {
   }
 
   get currentPhase(): AgentPhase {
-    return this.phase;
+    return this.data.phase;
   }
 
   get toolIterations(): number {
     return this.iterations;
   }
 
-  start(): vscode.CancellationToken {
+  start(userRequest: string): vscode.CancellationToken {
     this.stop();
     this.source = new vscode.CancellationTokenSource();
     this.iterations = 0;
     this.signatures.length = 0;
+    
+    this.data.taskId = randomUUID();
+    this.data.userRequest = userRequest;
+    this.data.createdAt = Date.now();
+    this.data.updatedAt = Date.now();
+    this.data.messages = [];
+    this.data.toolCalls = [];
+    this.data.toolResults = [];
+    this.data.changedFiles = [];
+    this.data.errors = [];
+    
     return this.source.token;
   }
 
   countIteration(): number {
+    this.data.updatedAt = Date.now();
     return ++this.iterations;
   }
 
   setPhase(phase: AgentPhase, label?: string): void {
-    this.phase = phase;
-    this.onPhase(phase, label ?? PHASE_LABEL[phase]);
+    this.data.phase = phase;
+    this.data.updatedAt = Date.now();
+    this.onPhase(phase, label ?? PHASE_LABEL[phase] ?? phase);
+  }
+
+  addTokenUsage(prompt: number, completion: number, cost: number = 0): void {
+    this.data.tokenUsage.promptTokens += prompt;
+    this.data.tokenUsage.completionTokens += completion;
+    this.data.estimatedCost += cost;
+    this.data.updatedAt = Date.now();
+  }
+
+  addError(error: string): void {
+    this.data.errors.push(error);
+    this.data.updatedAt = Date.now();
+  }
+
+  trackFileChange(filePath: string): void {
+    if (!this.data.changedFiles.includes(filePath)) {
+      this.data.changedFiles.push(filePath);
+      this.data.updatedAt = Date.now();
+    }
   }
 
   /**
@@ -79,9 +183,12 @@ export class AgentState {
     this.source?.cancel();
     this.source?.dispose();
     this.source = undefined;
+    if (this.data.phase !== 'completed' && this.data.phase !== 'failed') {
+      this.setPhase('cancelled');
+    }
   }
 
-  finish(phase: AgentPhase = 'idle'): void {
+  finish(phase: AgentPhase = 'completed'): void {
     this.source?.dispose();
     this.source = undefined;
     this.setPhase(phase);

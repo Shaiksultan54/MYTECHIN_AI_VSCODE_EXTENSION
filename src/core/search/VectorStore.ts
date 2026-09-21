@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Logger } from '../../logging/Logger.js';
+import { Logger } from '../logging/Logger.js';
 
 export interface VectorDocument {
   id: string;      // chunk id
@@ -45,10 +45,10 @@ export class VectorStore {
       for (const [id, vec] of Object.entries(parsed.vectors)) {
         this.vectors.set(id, vec);
       }
-      this.logger.info('VectorStore', `Loaded ${this.documents.size} indexed chunks.`);
+      this.logger.info(`VectorStore: Loaded ${this.documents.size} indexed chunks.`);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-        this.logger.error('VectorStore', 'Failed to load index', e);
+        this.logger.warn('VectorStore: Failed to load index', e);
       }
     }
   }
@@ -62,7 +62,7 @@ export class VectorStore {
       };
       await fs.writeFile(this.indexPath, JSON.stringify(data), 'utf8');
     } catch (e) {
-      this.logger.error('VectorStore', 'Failed to save index', e);
+      this.logger.error('VectorStore: Failed to save index', e);
     }
   }
 

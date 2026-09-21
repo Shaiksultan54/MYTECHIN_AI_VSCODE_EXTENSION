@@ -1,5 +1,5 @@
 import type { VectorSearchResult } from './VectorStore.js';
-import type { FileSearchResult } from '../workspace/FileSearcher.js';
+import type { SearchMatch } from '../workspace/FileSearcher.js';
 
 export interface HybridSearchResult {
   uriPath: string;
@@ -16,7 +16,7 @@ export class HybridRanker {
    */
   merge(
     semanticResults: VectorSearchResult[],
-    keywordResults: FileSearchResult[],
+    keywordResults: SearchMatch[],
     k = 60
   ): HybridSearchResult[] {
     const scores = new Map<string, HybridSearchResult>();
@@ -54,7 +54,7 @@ export class HybridRanker {
           uriPath: res.relativePath,
           startLine: res.line,
           endLine: res.line,
-          text: res.text,
+          text: res.preview,
           score,
           sources: ['keyword']
         });

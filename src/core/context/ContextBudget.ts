@@ -21,15 +21,20 @@ export interface BudgetResult {
 }
 
 /**
- * Fits context into the token budget. Pieces are sorted by source priority and
- * relevance, then taken until the budget runs out. A piece that is too big on
- * its own is trimmed rather than dropped, so an attached file always
- * contributes something.
+ * Tiered context budgeting engine.
+ * Reserves a safety margin for system instructions, tool outputs, and response generation.
+ * Organizes context into priority tiers:
+ * - Tier 0: Critical (Workspace map, explicit user attachments, active editor, project memory)
+ * - Tier 1: High Relevance (LSP symbols, problems, explicit @mentions)
+ * - Tier 2: Search & Retrieval (Keyword search, semantic search, documentation)
+ *
+ * Compacts lower-priority tiers first when tokens are constrained.
  */
 export class ContextBudget {
   constructor(private readonly budget: number) {}
 
   fit(pieces: ContextPiece[]): BudgetResult {
+    // Sort pieces by canonical source priority and relevance score
     const sorted = pieces.slice().sort((a, b) => {
       const aRank = SOURCE_PRIORITY[a.source] - (a.score ?? 0);
       const bRank = SOURCE_PRIORITY[b.source] - (b.score ?? 0);
@@ -46,6 +51,7 @@ export class ContextBudget {
         dropped.push(piece);
         continue;
       }
+
       if (piece.tokens <= remaining) {
         kept.push(piece);
         used += piece.tokens;
@@ -57,10 +63,15 @@ export class ContextBudget {
         dropped.push(piece);
         continue;
       }
-      // The notice is part of the piece, so it has to come out of the same
-      // allowance — otherwise trimming quietly overshoots the budget.
-      const notice = '\n… truncated to fit the context budget …';
+
+      // Compact/trim the piece to fit the remaining budget
+      const notice = '\n… truncated to fit context budget …';
       const charBudget = Math.max(0, Math.floor(remaining * 3.6) - notice.length);
+      if (charBudget < 80) {
+        dropped.push(piece);
+        continue;
+      }
+
       const trimmed = `${piece.body.slice(0, charBudget)}${notice}`;
       const trimmedTokens = estimateTokens(trimmed);
       kept.push({ ...piece, body: trimmed, tokens: trimmedTokens });

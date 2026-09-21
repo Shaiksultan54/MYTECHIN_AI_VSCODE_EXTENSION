@@ -208,7 +208,7 @@ export class AttachmentManager {
     this.onChanged();
   }
 
-  addDataUrl(name: string, dataUrl: string, mimeType: string): void {
+  addDataUrl(name: string, dataUrl: string, _mimeType: string): void {
     const size = Buffer.byteLength(dataUrl, 'utf8');
     this.push({
       id: randomUUID(),

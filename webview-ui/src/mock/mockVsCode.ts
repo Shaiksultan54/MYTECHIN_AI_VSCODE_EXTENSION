@@ -20,11 +20,9 @@ let mockState: HydrateState = {
     enableWorkspaceIndex: true,
     enableCheckpoints: true,
     loggingLevel: 'info',
-    excludePatterns: [],
     terminalTimeout: 120000,
     warnOnSensitiveUpload: true,
-    mcpConfigPath: '.mytechin/mcp.json',
-    debugPuter: false
+    mcpConfigPath: '.mytechin/mcp.json'
   },
   providers: [
     { id: 'ollama', name: 'Ollama (Local)', state: 'connected', isCloud: false, requiresSecret: false },
@@ -44,29 +42,32 @@ let mockState: HydrateState = {
   ],
   workspace: {
     name: 'localcode-ai-source',
-    folders: ['d:/zip/localcode-ai-source'],
+    folders: [{ name: 'localcode-ai-source', uri: 'd:/zip/localcode-ai-source' }],
     files: 128,
     sourceRoots: ['src', 'webview-ui'],
+    testRoots: [],
     languages: ['TypeScript', 'CSS', 'HTML'],
-    frameworks: ['React', 'Vite']
+    frameworks: ['React', 'Vite'],
+    packageManagers: ['npm'],
+    indexed: true
   },
   conversationId: 'conv-mock-1',
   title: 'Development Preview',
   messages: [],
   attachments: [],
   conversations: [
-    { id: 'conv-mock-1', title: 'Development Preview', updatedAt: Date.now() - 60000, messageCount: 0 },
-    { id: 'conv-mock-0', title: 'Architecture Planning', updatedAt: Date.now() - 3600000, messageCount: 4 }
+    { id: 'conv-mock-1', title: 'Development Preview', workspaceId: 'ws-1', provider: 'ollama', model: 'llama3:latest', createdAt: Date.now() - 60000, updatedAt: Date.now() - 60000, messageCount: 0 },
+    { id: 'conv-mock-0', title: 'Architecture Planning', workspaceId: 'ws-1', provider: 'ollama', model: 'llama3:latest', createdAt: Date.now() - 3600000, updatedAt: Date.now() - 3600000, messageCount: 4 }
   ],
   checkpoints: [],
   phase: 'idle',
   mcpServers: [
-    { id: 'filesystem', name: 'Local Filesystem', status: 'connected', toolCount: 4 },
-    { id: 'github', name: 'GitHub Server', status: 'connected', toolCount: 6 }
+    { id: 'filesystem', config: { id: 'filesystem', command: 'npx' }, state: 'connected', tools: [{ name: 'read', description: 'Read file' }] },
+    { id: 'github', config: { id: 'github', command: 'npx' }, state: 'connected', tools: [{ name: 'search', description: 'Search repo' }] }
   ],
   memory: [
-    { id: 'm-1', content: 'Local Ollama is default provider, Puter for free cloud fallbacks', category: 'architecture', timestamp: Date.now() - 7200000 },
-    { id: 'm-2', content: 'Use TypeScript strict mode and ES modules across all components', category: 'preference', timestamp: Date.now() - 3600000 }
+    { id: 'm-1', content: 'Local Ollama is default provider, Puter for free cloud fallbacks', category: 'architecture' },
+    { id: 'm-2', content: 'Use TypeScript strict mode and ES modules across all components', category: 'decisions' }
   ]
 };
 
@@ -107,7 +108,6 @@ function handleMockMessage(message: WebviewMessage): void {
 
     case 'sendPrompt': {
       const userText = message.text;
-      const turnId = `turn-${Date.now()}`;
       const userMsgId = `u_${Date.now()}`;
       const assistantMsgId = `a_${Date.now()}`;
 
@@ -123,12 +123,12 @@ function handleMockMessage(message: WebviewMessage): void {
       });
 
       // 2. Start turn & enter thinking
-      dispatchEvent({ type: 'turnStart', turnId });
-      dispatchEvent({ type: 'phase', phase: 'thinking', label: 'Thinking…' });
+      dispatchEvent({ type: 'assistantStarted', messageId: assistantMsgId });
+      dispatchEvent({ type: 'phaseChanged', phase: 'analyzing', label: 'Thinking…' });
 
       // 3. After a moment, switch to generating
       setTimeout(() => {
-        dispatchEvent({ type: 'phase', phase: 'generating', label: 'Generating…' });
+        dispatchEvent({ type: 'phaseChanged', phase: 'streaming', label: 'Generating…' });
 
         // 4. Stream final assistant response
         setTimeout(() => {
@@ -141,8 +141,8 @@ function handleMockMessage(message: WebviewMessage): void {
               createdAt: Date.now()
             }
           });
-          dispatchEvent({ type: 'phase', phase: 'idle', label: '' });
-          dispatchEvent({ type: 'turnEnd', turnId });
+          dispatchEvent({ type: 'phaseChanged', phase: 'idle', label: '' });
+          dispatchEvent({ type: 'agentCompleted', conversationId: 'conv-mock-1' });
         }, 500);
       }, 500);
       break;
