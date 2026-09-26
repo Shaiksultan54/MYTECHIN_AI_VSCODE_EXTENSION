@@ -93,7 +93,7 @@ export class OllamaProvider extends BaseProvider {
     const messages: any[] = req.system ? [{ role: 'system', content: req.system }] : [];
     for (const m of req.messages) {
       let contentString = '';
-      let images: string[] = [];
+      const images: string[] = [];
 
       if (Array.isArray(m.content)) {
         for (const part of m.content) {

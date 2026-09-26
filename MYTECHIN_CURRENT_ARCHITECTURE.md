@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0.0  
 **Audit Date:** 2026-09-21  
-**Scope:** Full codebase audit of `localcode-ai-source` (VS Code extension + Webview UI)  
+**Scope:** Full codebase audit of `mytechin-ai-source` (VS Code extension + Webview UI)
 **Status:** Completed Baseline Audit  
 
 ---
@@ -24,7 +24,7 @@ This document records the exact state of every module in the existing repository
 The codebase is organized into a modular TypeScript architecture with a dual-project structure (VS Code Extension core + React Webview UI):
 
 ```
-d:\zip\localcode-ai-source\
+d:\zip\mytechin-ai-source\
 ├── package.json                   # Extension manifest, contributes, settings, commands
 ├── tsconfig.json                  # Extension TypeScript configuration (ES2022, Node16)
 ├── esbuild.mjs                    # Production bundle builder (esbuild targeting Node)

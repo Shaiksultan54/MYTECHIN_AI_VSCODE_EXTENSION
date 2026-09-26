@@ -141,11 +141,6 @@ export class FileReader {
     if (text.length === 0) {
       return 0;
     }
-    let count = 1;
-    let index = -1;
-    while ((index = text.indexOf('\n', index + 1)) !== -1) {
-      count++;
-    }
-    return count;
+    return text.split(/\r?\n/).length;
   }
 }
