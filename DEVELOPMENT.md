@@ -43,7 +43,7 @@ npm run typecheck   # tsc on both projects
 npm run lint        # eslint on src/
 npm run test        # vitest
 npm run build       # webview bundle, then extension bundle
-npm run package     # localcode-ai.vsix
+npm run package     # mytechin-ai.vsix
 ```
 
 ## Layout

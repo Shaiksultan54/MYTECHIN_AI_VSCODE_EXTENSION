@@ -1,5 +1,7 @@
 # Mytechin AI
 
+[![CI](https://github.com/Shaiksultan54/MYTECHIN_AI_VSCODE_EXTENSION/actions/workflows/ci.yml/badge.svg)](https://github.com/Shaiksultan54/MYTECHIN_AI_VSCODE_EXTENSION/actions/workflows/ci.yml)
+
 A local-first, project-aware AI coding agent that lives in the VS Code sidebar.
 Bring your own model: a local Ollama server, Puter, OpenAI, Anthropic, or any
 OpenAI-compatible endpoint. The default configuration sends nothing off your
@@ -24,7 +26,7 @@ backend, no account.
 ### From a packaged build
 
 ```bash
-code --install-extension localcode-ai.vsix
+code --install-extension mytechin-ai.vsix
 ```
 
 ### From source
@@ -32,7 +34,7 @@ code --install-extension localcode-ai.vsix
 ```bash
 npm run install:all   # extension + webview dependencies
 npm run build         # webview bundle, then the extension bundle
-npm run package       # produces localcode-ai.vsix
+npm run package       # produces mytechin-ai.vsix
 ```
 
 Open the Extension Development Host with `F5` to try it without packaging.
@@ -41,7 +43,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for the full loop.
 ## First run
 
 1. Open a project folder.
-2. Click the LocalCode AI icon in the activity bar, or press `Ctrl+Shift+L`
+2. Click the Mytechin AI icon in the activity bar, or press `Ctrl+Shift+L`
    (`Cmd+Shift+L` on macOS).
 3. Pick a provider and a model next to the Send button.
 4. Ask something.
@@ -149,7 +151,7 @@ default. `askForRisky` is that option, not `alwaysAsk`: the tool classification
 in the same specification marks read-only tools as Safe, and the acceptance
 scenario expects search-and-read to proceed without prompting. Nothing that
 writes, deletes or executes is ever silent outside the opt-in autonomous mode.
-Set `localcode.approvalMode` to `alwaysAsk` if you would rather confirm reads
+Set `mytechin.approvalMode` to `alwaysAsk` if you would rather confirm reads
 too.
 
 ### Checkpoints
@@ -208,7 +210,7 @@ repair attempt before the model is told what went wrong and asked to retry.
 
 ## Settings
 
-All settings live under `localcode.*` in VS Code settings. The most useful ones:
+All settings live under `mytechin.*` in VS Code settings. The most useful ones:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |

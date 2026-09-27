@@ -41,8 +41,8 @@ let mockState: HydrateState = {
     { id: 'gpt-4o', name: 'GPT-4o', provider: 'puter', isFree: true, supportsTools: true, supportsVision: true, contextWindow: 128000 }
   ],
   workspace: {
-    name: 'localcode-ai-source',
-    folders: [{ name: 'localcode-ai-source', uri: 'd:/zip/localcode-ai-source' }],
+    name: 'mytechin-ai-source',
+    folders: [{ name: 'mytechin-ai-source', uri: 'd:/zip/mytechin-ai-source' }],
     files: 128,
     sourceRoots: ['src', 'webview-ui'],
     testRoots: [],
@@ -203,7 +203,7 @@ function handleMockMessage(message: WebviewMessage): void {
               kind: 'file',
               label: 'src/core/agent/AgentLoop.ts',
               tokens: 850,
-              uri: 'file:///d:/zip/localcode-ai-source/src/core/agent/AgentLoop.ts',
+              uri: 'file:///d:/zip/mytechin-ai-source/src/core/agent/AgentLoop.ts',
               reason: 'Active editor file'
             },
             {

@@ -38,9 +38,9 @@ To scale gracefully from small libraries to 100,000+ file enterprise repositorie
 ### 3.1 Project Metadata (`metadata.json`)
 ```json
 {
-  "projectId": "d:/zip/localcode-ai-source",
-  "workspaceRoot": "d:/zip/localcode-ai-source",
-  "projectName": "localcode-ai-source",
+  "projectId": "d:/zip/mytechin-ai-source",
+  "workspaceRoot": "d:/zip/mytechin-ai-source",
+  "projectName": "mytechin-ai-source",
   "detectedLanguages": ["TypeScript", "JavaScript"],
   "frameworks": ["React", "Node"],
   "packageManagers": ["npm"],
@@ -68,7 +68,7 @@ $$\text{Symbol ID} = \text{scheme} : \text{package} : \text{path} : \text{descri
   "version": "1.0.0",
   "symbols": [
     {
-      "id": "mytechin:localcode-ai-source:src/core/workspace/FileWriter.ts#FileWriter#write()",
+      "id": "mytechin:mytechin-ai-source:src/core/workspace/FileWriter.ts#FileWriter#write()",
       "name": "write",
       "kind": "method",
       "path": "src/core/workspace/FileWriter.ts",
