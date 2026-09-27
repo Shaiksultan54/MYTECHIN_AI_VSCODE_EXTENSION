@@ -21,5 +21,6 @@ vitest.config.ts
 DEVELOPMENT.md
 .gitignore
 webview-ui/dist/index.html
-localcode-ai.vsix
+mytechin-ai.vsix
 *.vsix
+.mytechin/**

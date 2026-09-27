@@ -96,3 +96,23 @@ Tokens Consumed: ~4,000
 ```
 
 By expanding context only when necessary, MYTECHIN accomplishes complete refactoring tasks using **< 10% of the tokens** consumed by naive whole-file assistants.
+
+## 5. Workspace dependency impact
+
+`src/core/workspace/WorkspaceGraph.ts` maintains a cheap, file-level dependency
+graph for TypeScript/JavaScript, C#, Python, and Go. It recognizes common
+`import`, `require`, and `using` forms and records imported names when the
+statement makes them apparent. `get_impact(file)` reports both the files the
+target imports and the files that import the target.
+
+The graph is built lazily and updated incrementally for source-file
+create/save/delete events from `WorkspaceWatcher`; project-marker changes
+invalidate the graph because they may alter workspace boundaries and ignore
+rules. This is deliberately a **best-effort static approximation**, not a
+type-aware resolver: aliases, package exports, generated code, dynamic imports,
+and language-specific compiler semantics may be unresolved or omitted. Use
+language-server definition/reference tools when exact symbol relationships are
+required.
+
+Before an edit tool runs, the context engine adds the target file's impact
+summary so exported API changes can be reviewed with known dependents first.

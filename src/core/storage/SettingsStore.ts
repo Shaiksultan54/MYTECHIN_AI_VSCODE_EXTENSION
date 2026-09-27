@@ -27,6 +27,7 @@ export class SettingsStore {
       provider: c.get<ProviderId>('provider', 'ollama'),
       model: c.get<string>('model', ''),
       ollamaEndpoint: c.get<string>('ollama.endpoint', 'http://127.0.0.1:11434'),
+      ollamaEmbeddingModel: c.get<string>('ollama.embeddingModel', 'nomic-embed-text'),
       openaiCompatibleBaseUrl: c.get<string>('openaiCompatible.baseUrl', ''),
       openaiCompatibleOrganization: c.get<string>('openaiCompatible.organization', ''),
       puterBaseUrl: c.get<string>('puter.baseUrl', 'https://api.puter.com'),
@@ -43,7 +44,9 @@ export class SettingsStore {
       enableCheckpoints: c.get<boolean>('enableCheckpoints', true),
       loggingLevel: c.get<string>('logging.level', 'info'),
       terminalTimeout: c.get<number>('terminalTimeout', 120000),
-      warnOnSensitiveUpload: c.get<boolean>('warnOnSensitiveUpload', true)
+      warnOnSensitiveUpload: c.get<boolean>('warnOnSensitiveUpload', true),
+      verifyAfterEdit: c.get<boolean>('verifyAfterEdit', true)
+      ,planBeforeExecute: c.get<boolean>('planBeforeExecute', false)
     };
   }
 
@@ -56,6 +59,7 @@ export class SettingsStore {
       provider: 'provider',
       model: 'model',
       ollamaEndpoint: 'ollama.endpoint',
+      ollamaEmbeddingModel: 'ollama.embeddingModel',
       openaiCompatibleBaseUrl: 'openaiCompatible.baseUrl',
       openaiCompatibleOrganization: 'openaiCompatible.organization',
       puterBaseUrl: 'puter.baseUrl',
@@ -67,7 +71,9 @@ export class SettingsStore {
       temperature: 'temperature',
       maxTokens: 'maxTokens',
       streaming: 'streaming',
-      enableCheckpoints: 'enableCheckpoints'
+      enableCheckpoints: 'enableCheckpoints',
+      verifyAfterEdit: 'verifyAfterEdit'
+      ,planBeforeExecute: 'planBeforeExecute'
     };
     const target = vscode.workspace.workspaceFolders?.length
       ? vscode.ConfigurationTarget.Workspace

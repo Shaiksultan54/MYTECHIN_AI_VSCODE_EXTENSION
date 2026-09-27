@@ -10,6 +10,8 @@ import {
 } from './editorTools.js';
 import { applyPatchTool, createFileTool, deleteFileTool, writeFileTool, multiApplyPatchTool } from './writeTools.js';
 import { runCommandTool } from './commandTools.js';
+import { getImpactTool } from './graphTools.js';
+import { gitBranchTool, gitCommitTool, gitDiffTool, gitLogTool, gitStatusTool } from './gitTools.js';
 import { webSearchTool, browsePageTool, extractContentTool } from '../../browser/BrowserTools.js';
 import {
   getDocumentSymbolsTool,
@@ -17,6 +19,10 @@ import {
   getDefinitionTool,
   getReferencesTool,
   getHoverTool
+  ,findDefinitionTool
+  ,findReferencesTool
+  ,workspaceSymbolsTool
+  ,documentSymbolsTool
 } from './lspTools.js';
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -34,6 +40,16 @@ export const ALL_TOOLS: ToolDefinition[] = [
   getDefinitionTool,
   getReferencesTool,
   getHoverTool,
+  findDefinitionTool,
+  findReferencesTool,
+  workspaceSymbolsTool,
+  documentSymbolsTool,
+  getImpactTool,
+  gitStatusTool,
+  gitDiffTool,
+  gitLogTool,
+  gitCommitTool,
+  gitBranchTool,
   openFileTool,
   openDiffTool,
   applyPatchTool,

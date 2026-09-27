@@ -14,6 +14,7 @@ import { Logger } from '../logging/Logger.js';
 import type { AgentEventSink } from './AgentEvents.js';
 import { AgentOrchestrator } from './AgentOrchestrator.js';
 import { AgentState } from './AgentState.js';
+import { VerificationLoop } from './VerificationLoop.js';
 
 export interface AgentRuntimeDeps {
   provider: () => Promise<AIProvider>;
@@ -41,6 +42,9 @@ export class AgentRuntime implements vscode.Disposable {
   private readonly state: AgentState;
   private readonly orchestrator: AgentOrchestrator;
   private active: Promise<void> | undefined;
+  private pendingPlan:
+    | { plan: import('../../shared/types.js').PlanView; resolve: (text: string | undefined) => void }
+    | undefined;
 
   constructor(private readonly deps: AgentRuntimeDeps) {
     this.state = new AgentState(
@@ -62,7 +66,44 @@ export class AgentRuntime implements vscode.Disposable {
       settings: deps.settings,
       checkpoints: deps.checkpoints,
       events: deps.events,
-      state: this.state
+      state: this.state,
+      verification: new VerificationLoop(deps.workspace, undefined),
+      requestPlanApproval: (plan, token) => this.requestPlanApproval(plan, token)
+    });
+  }
+
+  decidePlan(planId: string, decision: 'approve' | 'cancel' | 'edit', text?: string): void {
+    if (!this.pendingPlan || this.pendingPlan.plan.planId !== planId) {
+      return;
+    }
+    const pending = this.pendingPlan;
+    this.pendingPlan = undefined;
+    pending.resolve(decision === 'cancel' ? undefined : decision === 'edit' ? text?.trim() || undefined : pending.plan.text);
+    this.deps.events.emit({ type: 'planResolved', planId });
+  }
+
+  private requestPlanApproval(
+    plan: import('../../shared/types.js').PlanView,
+    token: vscode.CancellationToken
+  ): Promise<string | undefined> {
+    this.pendingPlan?.resolve(undefined);
+    this.pendingPlan = undefined;
+    this.deps.events.emit({ type: 'planRequired', plan });
+    return new Promise((resolve) => {
+      const disposable = token.onCancellationRequested(() => {
+        disposable.dispose();
+        if (this.pendingPlan?.plan.planId === plan.planId) {
+          this.pendingPlan = undefined;
+          resolve(undefined);
+        }
+      });
+      this.pendingPlan = {
+        plan,
+        resolve: (text) => {
+          disposable.dispose();
+          resolve(text);
+        }
+      };
     });
   }
 
@@ -131,6 +172,8 @@ export class AgentRuntime implements vscode.Disposable {
     }
     Logger.get().info('Agent stopped by the user');
     this.deps.approvals.rejectAll();
+    this.pendingPlan?.resolve(undefined);
+    this.pendingPlan = undefined;
     this.state.stop();
     this.setRunningContext(false);
     this.deps.events.emit({ type: 'phaseChanged', phase: 'idle', label: '' });

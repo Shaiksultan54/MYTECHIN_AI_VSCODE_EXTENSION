@@ -1,131 +1,120 @@
-# MYTECHIN AI — Index Formats, Storage & Data Schemas
+# Mytechin AI — Index and Workspace Storage
 
-**Document Version:** 2.0.0  
-**Classification:** Core Data Schema Specification  
-**Author:** Principal Architect & Staff AI Engineer  
+**Document version:** 3.0.0
+**Status:** Current implementation
+**Scope:** `.mytechin/` workspace data, semantic vectors, and invalidation
+## 1. Storage principles
 
----
+Mytechin keeps workspace state local to the workspace and separates durable
+user data from generated indexes:
 
-## 1. Overview & Storage Philosophy
+- settings and credentials stay in VS Code configuration and SecretStorage;
+- project memory is human-managed data;
+- indexes are disposable caches and may be rebuilt;
+- paths are normalized for cross-platform comparison;
+- source changes are invalidated incrementally where possible.
 
-To scale gracefully from small libraries to 100,000+ file enterprise repositories, MYTECHIN stores index data using **versioned, isolated, and incrementally-updated files** within the workspace `.mytechin/` directory.
+The extension does not currently write a SCIP symbol database or a serialized
+full call graph. Language-server providers remain the authority for exact
+symbol relationships.
 
-### Storage Principles
-1. **Zero Monolithic Bloat:** Files are indexed on demand; large repositories are never ingested wholesale into memory.
-2. **Deterministic Invalidation:** Caches are keyed by file modification timestamps and SHA-256 hashes.
-3. **Cross-Platform Portability:** Forward slashes and normalized paths are enforced across Windows and POSIX systems.
+## 2. Directory layout
 
----
-
-## 2. Directory Layout
-
-```
+```text
 <workspace-root>/
 └── .mytechin/
-    ├── metadata.json          # ProjectMetadata (Architecture, roots, entry points)
-    ├── memory.json            # ProjectMemory (Architectural rules and constraints)
-    ├── mcp.json               # Model Context Protocol server configurations
+    ├── memory.json                 # Project rules and approved memories
+    ├── mcp.json                    # Optional stdio MCP server configuration
     └── index/
-        ├── symbols.json       # SCIP-compatible symbol index and definitions
-        ├── graph.json         # Dependency & call graph relationships
-        └── vectors.json       # Optional semantic code and documentation embeddings
+        └── vectors/
+            ├── <path-hash>-0.json  # Bounded semantic-vector shard
+            └── <path-hash>-1.json  # Additional shard when needed
 ```
 
----
+`metadata.json`, `symbols.json`, and `graph.json` are not required outputs of
+the current implementation. Workspace metadata and the dependency graph are
+rebuilt or held by their owning services rather than being presented as a
+stable public file format.
 
-## 3. Index Schemas
+## 3. Vector shard format
 
-### 3.1 Project Metadata (`metadata.json`)
-```json
-{
-  "projectId": "d:/zip/localcode-ai-source",
-  "workspaceRoot": "d:/zip/localcode-ai-source",
-  "projectName": "localcode-ai-source",
-  "detectedLanguages": ["TypeScript", "JavaScript"],
-  "frameworks": ["React", "Node"],
-  "packageManagers": ["npm"],
-  "buildSystems": ["npm run build"],
-  "projectType": "node-project",
-  "sourceRoots": ["src"],
-  "testRoots": ["src/test"],
-  "generatedRoots": ["dist"],
-  "excludedRoots": [],
-  "configFiles": ["package.json", "tsconfig.json"],
-  "entryPoints": ["src/extension.ts"],
-  "services": ["core", "webview"],
-  "packages": ["mytechin-ai"],
-  "lastIndexedAt": 1758438120000,
-  "indexVersion": "1.0.0"
-}
-```
-
-### 3.2 SCIP-Compatible Symbol Index (`symbols.json`)
-Symbols maintain stable, range-independent identifiers:
-$$\text{Symbol ID} = \text{scheme} : \text{package} : \text{path} : \text{descriptor}$$
+Each shard is JSON with the following shape:
 
 ```json
 {
-  "version": "1.0.0",
-  "symbols": [
-    {
-      "id": "mytechin:localcode-ai-source:src/core/workspace/FileWriter.ts#FileWriter#write()",
-      "name": "write",
-      "kind": "method",
-      "path": "src/core/workspace/FileWriter.ts",
-      "startLine": 29,
-      "endLine": 61,
-      "signature": "async write(resolved: ResolvedPath, content: string): Promise<WriteResult>",
-      "container": "FileWriter",
-      "docstring": "Writes file atomically via temp file staging and rename."
-    }
-  ]
-}
-```
-
-### 3.3 Code Graph & Dependency Edges (`graph.json`)
-Tracks import hierarchies, call chains, and impact radius:
-
-```json
-{
-  "nodes": [
-    { "id": "src/core/workspace/FileWriter.ts", "type": "file" },
-    { "id": "src/core/workspace/PathSecurity.ts", "type": "file" },
-    { "id": "FileWriter", "type": "class" },
-    { "id": "write", "type": "method" }
-  ],
-  "edges": [
-    { "from": "src/core/workspace/FileWriter.ts", "to": "src/core/workspace/WorkspaceManager.ts", "type": "imports" },
-    { "from": "FileWriter", "to": "write", "type": "contains" },
-    { "from": "write", "to": "readCurrent", "type": "calls" }
-  ]
-}
-```
-
-### 3.4 Optional Semantic Embeddings (`vectors.json`)
-```json
-{
-  "version": "1.0.0",
-  "model": "nomic-embed-text",
   "documents": [
     {
-      "id": "chunk_fw_01",
-      "uriPath": "src/core/workspace/FileWriter.ts",
+      "id": "chunk-123",
+      "uriPath": "src/core/example.ts",
+      "text": "export function example() {}",
       "startLine": 1,
-      "endLine": 65,
-      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "text": "export class FileWriter { ... }"
+      "endLine": 1,
+      "hash": "sha256-of-source-or-chunk"
     }
   ],
   "vectors": {
-    "chunk_fw_01": [0.0124, -0.0452, 0.0891, "..."]
+    "chunk-123": [0.0124, -0.0452, 0.0891]
   }
 }
 ```
 
----
+The filename is derived from a SHA-256 hash of `uriPath`. A source path is
+assigned to a stable path shard, and a shard is capped at 500 chunks. The
+bounded format prevents one repository-wide JSON file from being parsed and
+rewritten for every index operation.
 
-## 4. Cache Invalidation & Incremental Synchronization
+The current store loads shard contents into memory for similarity search and
+rewrites the grouped shard files during `save()`. This bounds individual file
+size but does not yet provide an ANN index or fully out-of-core querying.
 
-1. **Watchers:** File system events (`onDidChange`, `onDidCreate`, `onDidDelete`) trigger incremental index updates.
-2. **Selective Invalidation:** When `FileWriter.ts` changes, only its symbols, call graph edges, and associated vector chunks are invalidated.
-3. **Stale Patch Guard:** If a file's disk hash changes between reading and applying a patch, the edit is aborted and re-read, preventing race condition corruptions.
+## 4. Legacy migration
+
+Older installations may contain:
+
+```text
+.mytechin/index/vectors.json
+```
+
+On load, the store imports that file into the shard layout, saves the shards,
+and removes the legacy file after a successful migration. A failed migration
+is logged and does not delete the legacy data.
+
+## 5. Invalidation
+
+`WorkspaceWatcher` observes source and project-marker changes:
+
+1. source create/save/delete events update the changed graph entry and notify
+   search/index services;
+2. project-marker changes invalidate scanner and graph state because roots,
+   languages, and ignore rules may have changed;
+3. semantic chunks are compared using document hashes so unchanged content can
+   be retained;
+4. deleting a source removes its vector documents and stale shard data on the
+   next save.
+
+## 6. WorkspaceGraph data model
+
+`WorkspaceGraph` is an in-memory, file-level approximation. An edge contains:
+
+```text
+importer: src/app.ts
+target:   src/lib.ts
+symbols:  ["greet"]
+```
+
+It recognizes common relative TypeScript/JavaScript imports and `require`
+calls, Python `from ... import ...` forms, and common Go/C# `using` patterns.
+Resolution uses workspace files and common extensions/index candidates.
+
+The graph intentionally does not claim compiler-level correctness. Dynamic
+imports, aliases, generated code, package exports, and language-specific
+module resolution can be unresolved. Use `find_definition` and
+`find_references` for exact symbol-level answers.
+
+## 7. Security and privacy
+
+`.mytechin/` may contain project rules and generated index data. It should be
+excluded from source control unless a team explicitly wants to share it.
+Sensitive files are excluded from indexing by the normal workspace ignore and
+sensitive-file rules. Cloud upload confirmation is controlled by
+`mytechin.warnOnSensitiveUpload`.

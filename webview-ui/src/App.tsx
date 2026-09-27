@@ -52,14 +52,32 @@ export function App(): JSX.Element {
 
   return (
     <div className="app">
-      {!isChat && (
-        <header className="app-header" style={{ justifyContent: 'flex-start' }}>
-          <button type="button" className="icon-button" title="Back to chat" onClick={() => setPanel('chat')}>
+      <header className="app-header">
+        {!isChat ? (
+          <button type="button" className="icon-button" title="Back to chat" aria-label="Back to chat" onClick={() => setPanel('chat')}>
             <Icon name="arrow-left" />
           </button>
-          <span className="app-title" style={{ marginLeft: 8 }}>{PANEL_TITLE[state.panel]}</span>
-        </header>
-      )}
+        ) : null}
+        <div className="brand-lockup">
+          <span className="brand-mark"><Icon name="sparkle" /></span>
+          <span className="app-title">{PANEL_TITLE[state.panel]}</span>
+        </div>
+        <nav className="app-nav" aria-label="Workspace views">
+          {(['chat', 'context', 'history', 'memory', 'settings'] as Panel[]).map((panel) => (
+            <button
+              key={panel}
+              type="button"
+              className={`nav-button${state.panel === panel ? ' nav-button-active' : ''}`}
+              aria-label={PANEL_TITLE[panel]}
+              aria-current={state.panel === panel ? 'page' : undefined}
+              title={PANEL_TITLE[panel]}
+              onClick={() => setPanel(panel)}
+            >
+              <Icon name={panel === 'chat' ? 'comment-discussion' : panel === 'context' ? 'references' : panel === 'history' ? 'history' : panel === 'memory' ? 'book' : 'settings-gear'} />
+            </button>
+          ))}
+        </nav>
+      </header>
 
       {state.notice ? (
         <div className={`notice notice-${state.notice.level}`} role="status">
@@ -108,6 +126,7 @@ export function App(): JSX.Element {
           <MessageList
             messages={state.messages}
             approvals={state.approvals}
+            plan={state.plan}
             phaseLabel={state.phaseLabel}
             busy={busy}
           />

@@ -167,6 +167,13 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
             hint="Requests stay on this machine."
             onCommit={(value) => post({ type: 'saveSettings', patch: { ollamaEndpoint: value } })}
           />
+          <TextField
+            label="Embedding model"
+            value={settings.ollamaEmbeddingModel}
+            placeholder="nomic-embed-text"
+            hint="Used for local semantic search. Pull it with ollama pull if it is not installed."
+            onCommit={(value) => post({ type: 'saveSettings', patch: { ollamaEmbeddingModel: value } })}
+          />
         </section>
       ) : null}
 
@@ -394,6 +401,22 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
             }
           />
           Let read-only tools run without asking
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings.planBeforeExecute}
+            onChange={(event) => post({ type: 'saveSettings', patch: { planBeforeExecute: event.target.checked } })}
+          />
+          Review an editable plan before the agent executes tools
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings.verifyAfterEdit}
+            onChange={(event) => post({ type: 'saveSettings', patch: { verifyAfterEdit: event.target.checked } })}
+          />
+          Verify diagnostics after edits
         </label>
       </section>
 

@@ -1,4 +1,4 @@
 {
-  "localcode.provider": "ollama",
-  "localcode.model": "qwen2.5-coder:3b"
+  "mytechin.provider": "ollama",
+  "mytechin.model": "qwen2.5-coder:3b"
 }

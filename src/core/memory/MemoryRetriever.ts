@@ -13,7 +13,6 @@ export class MemoryRetriever {
    * Safety rules are always prioritized.
    */
   async retrieve(prompt: string, maxEntries = 15): Promise<MemoryEntry[]> {
-    // @ts-ignore: used for future semantic search implementation
     void this._semanticSearch;
     const all = this.memoryService.getEntries();
     if (all.length === 0) return [];

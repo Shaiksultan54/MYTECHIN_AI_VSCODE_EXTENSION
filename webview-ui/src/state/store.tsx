@@ -11,6 +11,7 @@ import type { ExtensionEvent } from '../../../src/shared/events/index.js';
 import type {
   AgentPhase,
   ApprovalRequestView,
+  PlanView,
   ChatMessage,
   CheckpointView,
   ContextAttachment,
@@ -42,6 +43,7 @@ export interface AppState {
   conversations: ConversationSummary[];
   checkpoints: CheckpointView[];
   approvals: ApprovalRequestView[];
+  plan: PlanView | undefined;
   context: ContextSummaryView | undefined;
   phase: AgentPhase;
   phaseLabel: string;
@@ -67,6 +69,7 @@ const initialState: AppState = {
   conversations: [],
   checkpoints: [],
   approvals: [],
+  plan: undefined,
   context: undefined,
   phase: 'idle',
   phaseLabel: '',
@@ -210,6 +213,12 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
 
     case 'toolApprovalRequired':
       return { ...state, approvals: [...state.approvals, event.request] };
+
+    case 'planRequired':
+      return { ...state, plan: event.plan };
+
+    case 'planResolved':
+      return state.plan?.planId === event.planId ? { ...state, plan: undefined } : state;
 
     case 'toolApprovalResolved':
       return {

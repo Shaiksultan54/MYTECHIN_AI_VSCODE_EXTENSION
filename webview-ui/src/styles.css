@@ -70,6 +70,28 @@ pre,
 
 /* ------------------------------------------------------------------ shell */
 
+.plan-card {
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid var(--vscode-textLink-foreground);
+  border-radius: var(--lc-radius);
+  background: var(--vscode-editorWidget-background);
+}
+
+.plan-card h3 {
+  margin: 0 0 8px;
+}
+
+.plan-card textarea {
+  width: 100%;
+  resize: vertical;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  padding: 8px;
+  font: inherit;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -99,6 +121,49 @@ pre,
   padding: 4px 6px;
   border-bottom: var(--lc-border);
   flex: 0 0 auto;
+}
+
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.brand-mark,
+.empty-hero-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--vscode-button-background) 35%, transparent);
+}
+
+.app-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border-radius: var(--lc-radius);
+  color: var(--lc-muted);
+}
+
+.nav-button:hover,
+.nav-button-active {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
 .app-title {
@@ -1261,6 +1326,24 @@ textarea:focus-visible {
   gap: 10px;
 }
 
+.empty-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.empty-hero-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.empty-hero h2 {
+  font-size: 1.25em;
+}
+
 .empty-state h2 {
   margin: 0;
   font-size: 1.2em;
@@ -1309,6 +1392,9 @@ textarea:focus-visible {
 }
 
 .starter {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--vscode-widget-border, var(--lc-border));
   border-radius: 6px;
@@ -1316,6 +1402,12 @@ textarea:focus-visible {
   color: var(--vscode-foreground);
   transition: all 0.2s ease;
   background: var(--vscode-editorWidget-background, transparent);
+}
+
+.starter .codicon {
+  color: var(--vscode-textLink-foreground);
+  margin-top: 2px;
+  flex: 0 0 auto;
 }
 
 .starter:hover {

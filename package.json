@@ -23,7 +23,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/mytechin/mytechin-ai"
+    "url": "https://github.com/Shaiksultan54/MYTECHIN_AI_VSCODE_EXTENSION"
   },
   "icon": "media/icon.png",
   "main": "./dist/extension.js",
@@ -315,6 +315,11 @@
           "default": "http://127.0.0.1:11434",
           "description": "Base URL of the local Ollama server."
         },
+        "mytechin.ollama.embeddingModel": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Local Ollama embedding model. Run `ollama pull <model>` if it is not installed."
+        },
         "mytechin.openaiCompatible.baseUrl": {
           "type": "string",
           "default": "",
@@ -396,6 +401,16 @@
           "type": "boolean",
           "default": true,
           "description": "Snapshot files before the agent changes them so you can restore."
+        },
+        "mytechin.verifyAfterEdit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check diagnostics after edits and provide repair guidance before the next agent turn."
+        },
+        "mytechin.planBeforeExecute": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show an editable plan and require approval before the agent can execute tools."
         },
         "mytechin.logging.level": {
           "type": "string",

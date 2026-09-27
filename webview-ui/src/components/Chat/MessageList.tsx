@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
-import type { ApprovalRequestView, ChatMessage } from '../../../../src/shared/types.js';
+import type { ApprovalRequestView, ChatMessage, PlanView } from '../../../../src/shared/types.js';
+import { PlanCard } from '../Plan/PlanCard.js';
 import { Message } from './Message.js';
 import { ApprovalCard } from '../Approval/ApprovalCard.js';
 import { Icon } from '../Icon.js';
@@ -13,11 +14,12 @@ const WINDOW = 60;
 export interface MessageListProps {
   messages: ChatMessage[];
   approvals: ApprovalRequestView[];
+  plan?: PlanView;
   phaseLabel: string;
   busy: boolean;
 }
 
-export function MessageList({ messages, approvals, phaseLabel, busy }: MessageListProps): JSX.Element {
+export function MessageList({ messages, approvals, plan, phaseLabel, busy }: MessageListProps): JSX.Element {
   const scroller = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   const [showAll, setShowAll] = useState(false);
@@ -61,6 +63,7 @@ export function MessageList({ messages, approvals, phaseLabel, busy }: MessageLi
       {approvals.map((request) => (
         <ApprovalCard key={request.requestId} request={request} />
       ))}
+      {plan ? <PlanCard plan={plan} /> : null}
 
       {busy && phaseLabel ? (
         <p className="phase">

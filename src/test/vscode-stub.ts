@@ -88,6 +88,10 @@ export class Range {
 
 export class Selection extends Range {}
 
+export class WorkspaceEdit {
+  replace(): void {}
+}
+
 export const Uri = {
   file: (fsPath: string) => ({ scheme: 'file', fsPath, path: fsPath, toString: () => `file://${fsPath}` }),
   parse: (value: string) => ({ scheme: 'file', fsPath: value, path: value, toString: () => value }),
@@ -107,6 +111,7 @@ export const workspace = {
   fs: {
     readFile: async () => new Uint8Array(),
     writeFile: async () => undefined,
+    rename: async () => undefined,
     stat: async () => ({ size: 0, type: 1, ctime: 0, mtime: 0 }),
     delete: async () => undefined,
     createDirectory: async () => undefined,
@@ -120,6 +125,7 @@ export const workspace = {
     dispose: () => undefined
   }),
   openTextDocument: async () => ({ getText: () => '' }),
+  applyEdit: async () => true,
   textDocuments: [] as unknown[]
 };
 
@@ -141,12 +147,16 @@ export const window = {
   showOpenDialog: async () => undefined,
   showTextDocument: async () => ({ selection: undefined, revealRange: () => undefined }),
   registerWebviewViewProvider: () => new Disposable(),
-  createTerminal: () => ({ sendText: () => undefined, show: () => undefined, dispose: () => undefined })
+  createTerminal: (_options?: unknown) => ({ sendText: (_text: string) => undefined, show: () => undefined, dispose: () => undefined })
+};
+
+export const executeCommandHandler = {
+  run: async (..._args: unknown[]) => undefined
 };
 
 export const commands = {
   registerCommand: () => new Disposable(),
-  executeCommand: async () => undefined
+  executeCommand: async (...args: unknown[]) => executeCommandHandler.run(...args)
 };
 
 export const languages = {

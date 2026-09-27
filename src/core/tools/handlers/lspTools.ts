@@ -93,7 +93,7 @@ export const getDocumentSymbolsTool: ToolDefinition = {
       >('vscode.executeDocumentSymbolProvider', resolved.uri);
 
       if (!symbols || symbols.length === 0) {
-        return ok('get_document_symbols', `No symbols found in ${resolved.relativePath}.`, {
+        return ok('get_document_symbols', `No language server available for this file type, or no symbols found in ${resolved.relativePath}.`, {
           path: resolved.relativePath,
           symbols: []
         });
@@ -156,7 +156,7 @@ export const getWorkspaceSymbolsTool: ToolDefinition = {
       );
 
       if (!symbols || symbols.length === 0) {
-        return ok('get_workspace_symbols', `No workspace symbols matching "${query}".`, {
+        return ok('get_workspace_symbols', `No language server available for this workspace, or no symbols matching "${query}".`, {
           query,
           symbols: []
         });
@@ -224,7 +224,7 @@ export const getDefinitionTool: ToolDefinition = {
       >('vscode.executeDefinitionProvider', resolved.uri, position);
 
       if (!definitions || definitions.length === 0) {
-        return ok('get_definition', `No definition found at ${resolved.relativePath}:${line}:${character}.`, {
+        return ok('get_definition', `No language server available for this file type, or no definition found at ${resolved.relativePath}:${line}:${character}.`, {
           definitions: []
         });
       }
@@ -300,7 +300,7 @@ export const getReferencesTool: ToolDefinition = {
       );
 
       if (!references || references.length === 0) {
-        return ok('get_references', `No references found for symbol at ${resolved.relativePath}:${line}:${character}.`, {
+        return ok('get_references', `No language server available for this file type, or no references found for symbol at ${resolved.relativePath}:${line}:${character}.`, {
           references: []
         });
       }
@@ -387,3 +387,34 @@ export const getHoverTool: ToolDefinition = {
     }
   }
 };
+
+function alias(tool: ToolDefinition, name: string, description: string): ToolDefinition {
+  return {
+    ...tool,
+    name,
+    description,
+    execute: async (input, ctx) => ({ ...(await tool.execute(input, ctx)), toolName: name })
+  };
+}
+
+/** New language-server tool names. The get_* exports remain for compatibility. */
+export const findDefinitionTool = alias(
+  getDefinitionTool,
+  'find_definition',
+  'Find the definition of a named symbol at a file position using VS Code language-server providers. Prefer this over search_code for a specific symbol.'
+);
+export const findReferencesTool = alias(
+  getReferencesTool,
+  'find_references',
+  'Find call sites and references for a named symbol at a file position using VS Code language-server providers. Prefer this over search_code for a specific symbol.'
+);
+export const workspaceSymbolsTool = alias(
+  getWorkspaceSymbolsTool,
+  'workspace_symbols',
+  'Search workspace symbols by name using VS Code language-server providers.'
+);
+export const documentSymbolsTool = alias(
+  getDocumentSymbolsTool,
+  'document_symbols',
+  'List symbols in a document using the VS Code language server.'
+);

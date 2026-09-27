@@ -2,15 +2,18 @@ import * as vscode from 'vscode';
 import type { WorkspaceScanner } from './WorkspaceScanner.js';
 
 /**
- * Invalidates the workspace map when project markers change. Deliberately
- * narrow: watching every file in a large repository is expensive and buys
- * nothing, because source files do not change the project shape.
+ * Refreshes project metadata for marker changes and forwards source-file
+ * changes for incremental consumers such as WorkspaceGraph.
  */
 export class WorkspaceWatcher implements vscode.Disposable {
   private readonly watcher: vscode.FileSystemWatcher;
+  private readonly sourceWatcher: vscode.FileSystemWatcher;
   private timer: NodeJS.Timeout | undefined;
 
-  constructor(private readonly scanner: WorkspaceScanner, private readonly onChanged: () => void) {
+  constructor(
+    private readonly scanner: WorkspaceScanner,
+    private readonly onChanged: (uri?: vscode.Uri, deleted?: boolean) => void
+  ) {
     this.watcher = vscode.workspace.createFileSystemWatcher(
       '**/{package.json,tsconfig.json,angular.json,go.mod,Cargo.toml,pom.xml,composer.json,pyproject.toml,requirements.txt,*.csproj,*.sln}'
     );
@@ -18,6 +21,12 @@ export class WorkspaceWatcher implements vscode.Disposable {
     this.watcher.onDidChange(handle);
     this.watcher.onDidCreate(handle);
     this.watcher.onDidDelete(handle);
+
+    const sourceWatcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,tsx,js,jsx,mjs,cjs,py,go,cs}');
+    sourceWatcher.onDidChange((uri) => this.onChanged(uri, false));
+    sourceWatcher.onDidCreate((uri) => this.onChanged(uri, false));
+    sourceWatcher.onDidDelete((uri) => this.onChanged(uri, true));
+    this.sourceWatcher = sourceWatcher;
   }
 
   private schedule(): void {
@@ -35,5 +44,6 @@ export class WorkspaceWatcher implements vscode.Disposable {
       clearTimeout(this.timer);
     }
     this.watcher.dispose();
+    this.sourceWatcher.dispose();
   }
 }

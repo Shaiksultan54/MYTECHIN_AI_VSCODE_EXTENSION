@@ -1,5 +1,7 @@
 # Mytechin AI
 
+[![CI](https://github.com/Shaiksultan54/MYTECHIN_AI_VSCODE_EXTENSION/actions/workflows/ci.yml/badge.svg)](https://github.com/Shaiksultan54/MYTECHIN_AI_VSCODE_EXTENSION/actions/workflows/ci.yml)
+
 A local-first, project-aware AI coding agent that lives in the VS Code sidebar.
 Bring your own model: a local Ollama server, Puter, OpenAI, Anthropic, or any
 OpenAI-compatible endpoint. The default configuration sends nothing off your
@@ -19,12 +21,15 @@ backend, no account.
 - **Works with any language.** C#/.NET, Angular, React, Node, TypeScript,
   JavaScript, Python, SQL, Java, Go, Rust, PHP, and mixed repositories.
 
+For a complete explanation of the runtime, tools, safety boundaries, indexing,
+providers, and settings, see the [Feature Guide](docs/FEATURE_GUIDE.md).
+
 ## Install
 
 ### From a packaged build
 
 ```bash
-code --install-extension localcode-ai.vsix
+code --install-extension mytechin-ai.vsix
 ```
 
 ### From source
@@ -32,7 +37,7 @@ code --install-extension localcode-ai.vsix
 ```bash
 npm run install:all   # extension + webview dependencies
 npm run build         # webview bundle, then the extension bundle
-npm run package       # produces localcode-ai.vsix
+npm run package       # produces mytechin-ai.vsix
 ```
 
 Open the Extension Development Host with `F5` to try it without packaging.
@@ -41,7 +46,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for the full loop.
 ## First run
 
 1. Open a project folder.
-2. Click the LocalCode AI icon in the activity bar, or press `Ctrl+Shift+L`
+2. Click the Mytechin AI icon in the activity bar, or press `Ctrl+Shift+L`
    (`Cmd+Shift+L` on macOS).
 3. Pick a provider and a model next to the Send button.
 4. Ask something.
@@ -149,7 +154,7 @@ default. `askForRisky` is that option, not `alwaysAsk`: the tool classification
 in the same specification marks read-only tools as Safe, and the acceptance
 scenario expects search-and-read to proceed without prompting. Nothing that
 writes, deletes or executes is ever silent outside the opt-in autonomous mode.
-Set `localcode.approvalMode` to `alwaysAsk` if you would rather confirm reads
+Set `mytechin.approvalMode` to `alwaysAsk` if you would rather confirm reads
 too.
 
 ### Checkpoints
@@ -176,7 +181,9 @@ confirmation. Restores are never automatic.
 
 ## Tools
 
-The agent has seventeen tools. Risk drives the approval rules above.
+The agent exposes read, search, editor, language-server, dependency-impact,
+Git, browser, editing, and terminal tools. Risk drives the approval rules
+above. The complete behavior is documented in the [Feature Guide](docs/FEATURE_GUIDE.md).
 
 | Tool | Risk | What it does |
 | --- | --- | --- |
@@ -186,6 +193,11 @@ The agent has seventeen tools. Risk drives the approval rules above.
 | `get_current_file`, `get_selection` | Safe | What you are looking at |
 | `get_problems` | Safe | Diagnostics from the Problems panel |
 | `get_terminal_output` | Safe | Output of the last command it ran |
+| `find_definition`, `find_references` | Safe | Language-server definition and call-site lookup |
+| `workspace_symbols`, `document_symbols` | Safe | Language-server symbol lookup |
+| `get_impact` | Safe | Approximate importers and dependencies for a file |
+| `git_status`, `git_diff`, `git_log` | Safe | Read-only Git inspection |
+| `git_commit`, `git_branch` | Ask | Approved Git mutation operations |
 | `open_file`, `open_diff` | Safe | Show you something |
 | `write_file`, `create_file`, `apply_patch` | Ask | Change a file |
 | `delete_file` | Strong | Remove a file (to trash) |
@@ -208,13 +220,14 @@ repair attempt before the model is told what went wrong and asked to retry.
 
 ## Settings
 
-All settings live under `localcode.*` in VS Code settings. The most useful ones:
+All settings live under `mytechin.*` in VS Code settings. The most useful ones:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `provider` | `ollama` | Active provider |
 | `model` | *(empty)* | Model id for that provider |
 | `ollama.endpoint` | `http://127.0.0.1:11434` | Local Ollama server |
+| `ollama.embeddingModel` | `nomic-embed-text` | Local model used for semantic-search embeddings |
 | `approvalMode` | `askForRisky` | See the table above |
 | `maxToolIterations` | `24` | Tool calls per task before the agent stops |
 | `maxContextTokens` | `32000` | Approximate budget for everything sent |
@@ -223,6 +236,10 @@ All settings live under `localcode.*` in VS Code settings. The most useful ones:
 | `excludePatterns` | `[]` | Extra globs on top of `.gitignore` |
 | `terminalTimeout` | `120000` | Milliseconds before a command is cancelled |
 | `warnOnSensitiveUpload` | `true` | Confirm before secrets reach the cloud |
+| `enableWorkspaceIndex` | `true` | Maintain workspace metadata and dependency intelligence |
+| `verifyAfterEdit` | `true` | Compare diagnostics after successful edits |
+| `planBeforeExecute` | `false` | Require an editable plan before the agent starts |
+| `mcpConfigPath` | `.mytechin/mcp.json` | MCP server configuration path |
 
 ## Known limitations
 
@@ -230,9 +247,10 @@ All settings live under `localcode.*` in VS Code settings. The most useful ones:
   `puter-chat-completion` interface. That API is not formally versioned, so the
   integration is best-effort and may need adjusting if Puter changes it. The
   error messages will tell you when the response shape is not what was expected.
-- **No embeddings or semantic index.** Retrieval is lexical: ripgrep, the VS
-  Code symbol provider, and the project map. `ContextCollector` is the seam
-  where a vector store would slot in.
+- **Semantic embeddings are local by default for Ollama.** The extension uses
+  `nomic-embed-text` through Ollama when `provider` is `ollama`, and prompts you
+  to pull the configured model when it is missing. Other providers remain
+  lexical unless an embedding provider is explicitly configured.
 - **Token counts are estimates.** Roughly 3.6 characters per token, which is
   close enough to keep a prompt from running away but is not a real tokenizer.
 - **Providers cannot be exercised in CI.** The unit tests stub `fetch`; verifying

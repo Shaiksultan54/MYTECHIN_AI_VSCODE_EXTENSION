@@ -15,7 +15,7 @@ import { WorkspaceWatcher } from '../workspace/WorkspaceWatcher.js';
 import { VisionAdapter } from '../vision/VisionAdapter.js';
 import { BrowserService } from '../browser/BrowserService.js';
 import { SemanticSearchService } from '../search/SemanticSearchService.js';
-import { OllamaEmbeddingProvider } from '../search/EmbeddingProvider.js';
+import { createEmbeddingProvider } from '../search/EmbeddingProvider.js';
 import { ProjectMemoryService } from '../memory/ProjectMemoryService.js';
 import { MemoryRetriever } from '../memory/MemoryRetriever.js';
 import { TerminalManager } from '../terminal/TerminalManager.js';
@@ -35,6 +35,7 @@ import { ConversationManager } from '../conversation/ConversationManager.js';
 import { AgentRuntime } from '../agent/AgentRuntime.js';
 import { McpConfigStore } from '../mcp/McpConfigStore.js';
 import { McpServerManager } from '../mcp/McpServerManager.js';
+import { WorkspaceGraph } from '../workspace/WorkspaceGraph.js';
 
 /**
  * The single wiring point of the extension. It constructs every service, owns
@@ -66,6 +67,7 @@ export class ExtensionController implements vscode.Disposable {
   private readonly registry: ToolRegistry;
   private readonly executor: ToolExecutor;
   private readonly watcher: WorkspaceWatcher;
+  private readonly graph: WorkspaceGraph;
   private readonly browserService: BrowserService;
   private readonly semanticSearch: SemanticSearchService;
   readonly memoryService: ProjectMemoryService;
@@ -87,6 +89,7 @@ export class ExtensionController implements vscode.Disposable {
     this.writer = new FileWriter(this.workspace);
     this.searcher = new FileSearcher(this.workspace);
     this.scanner = new WorkspaceScanner(this.workspace);
+    this.graph = new WorkspaceGraph(this.workspace);
     this.terminal = new TerminalManager(() => this.settings.read().terminalTimeout);
     this.diffs = new DiffManager();
 
@@ -129,7 +132,7 @@ export class ExtensionController implements vscode.Disposable {
       this.emit({ type: 'attachmentsUpdated', attachments: this.attachments.list() })
     );
 
-    const embedder = new OllamaEmbeddingProvider(this.settings);
+    const embedder = createEmbeddingProvider(this.settings);
     this.semanticSearch = new SemanticSearchService(
       this.workspace,
       this.reader,
@@ -144,7 +147,8 @@ export class ExtensionController implements vscode.Disposable {
       this.searcher,
       this.scanner,
       this.attachments,
-      this.semanticSearch
+      this.semanticSearch,
+      this.graph
     );
     this.context = new ContextManager(
       collector,
@@ -186,7 +190,12 @@ export class ExtensionController implements vscode.Disposable {
       events: { emit: (event) => this.emit(event) }
     });
 
-    this.watcher = new WorkspaceWatcher(this.scanner, () => {
+    this.watcher = new WorkspaceWatcher(this.scanner, (uri, deleted) => {
+      if (uri) {
+        void this.graph.update(uri, deleted);
+        return;
+      }
+      this.graph.invalidate();
       void this.refreshWorkspace();
     });
 
@@ -350,6 +359,10 @@ export class ExtensionController implements vscode.Disposable {
           return;
         }
         this.approvals.resolve(message.requestId, message.approved, message.rememberForTask);
+        return;
+
+      case 'planDecision':
+        this.agent.decidePlan(message.planId, message.decision, message.text);
         return;
 
       case 'selectProvider':
@@ -767,6 +780,7 @@ export class ExtensionController implements vscode.Disposable {
       terminal: this.terminal,
       checkpoints: this.checkpoints,
       diffs: this.diffs,
+      graph: this.graph,
       browser: this.browserService,
       token,
       conversationId: this.conversations.id,

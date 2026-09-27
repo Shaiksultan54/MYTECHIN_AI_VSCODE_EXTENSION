@@ -18,6 +18,7 @@ export type WebviewMessage =
   | { type: 'removeAttachment'; attachmentId: string }
   | { type: 'clearAttachments' }
   | { type: 'approveTool'; requestId: string; approved: boolean; rememberForTask?: boolean }
+  | { type: 'planDecision'; planId: string; decision: 'approve' | 'cancel' | 'edit'; text?: string }
   | { type: 'selectProvider'; providerId: ProviderId }
   | { type: 'selectModel'; modelId: string }
   | { type: 'refreshModels' }
@@ -47,6 +48,7 @@ export interface SettingsPatch {
   provider: ProviderId;
   model: string;
   ollamaEndpoint: string;
+  ollamaEmbeddingModel: string;
   openaiCompatibleBaseUrl: string;
   openaiCompatibleOrganization: string;
   puterBaseUrl: string;
@@ -59,6 +61,8 @@ export interface SettingsPatch {
   maxTokens: number;
   streaming: boolean;
   enableCheckpoints: boolean;
+  verifyAfterEdit: boolean;
+  planBeforeExecute: boolean;
 }
 
 export type AttachmentDraft = Omit<ContextAttachment, 'id' | 'status'> &

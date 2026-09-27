@@ -21,8 +21,13 @@ export function EmptyState({ workspace, provider, onConfigure }: EmptyStateProps
 
   return (
     <div className="empty-state">
-      <h2>Mytechin AI</h2>
-      <p className="empty-lead">Your project-aware coding assistant.</p>
+      <div className="empty-hero">
+        <span className="empty-hero-mark"><Icon name="sparkle" /></span>
+        <div>
+          <h2>Build with confidence</h2>
+          <p className="empty-lead">A project-aware coding assistant that understands your workspace.</p>
+        </div>
+      </div>
 
       {workspace && workspace.folders.length > 0 ? (
         <div className="workspace-card">
@@ -47,10 +52,11 @@ export function EmptyState({ workspace, provider, onConfigure }: EmptyStateProps
 
       {configured ? (
         <>
-          <p className="empty-hint">Ask about your code, attach files, or let the agent inspect the workspace.</p>
+          <p className="empty-hint">Start with a question, attach context, or choose a workflow below.</p>
           <div className="starters">
             {STARTERS.map((starter) => (
               <button key={starter} type="button" className="starter" onClick={() => post({ type: 'sendPrompt', text: starter })}>
+                <Icon name="arrow-right" />
                 {starter}
               </button>
             ))}

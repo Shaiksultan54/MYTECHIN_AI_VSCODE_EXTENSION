@@ -44,6 +44,10 @@ export class ContextManager {
     return this.lastSummary;
   }
 
+  async preEditImpact(path: string): Promise<ContextPiece | undefined> {
+    return this.collector.impactContext(path);
+  }
+
   async build(prompt: string, token: vscode.CancellationToken): Promise<BuiltContext> {
     const started = Date.now();
     const attachments = this.attachments.list();
@@ -83,6 +87,10 @@ export class ContextManager {
         pieces.push(editor);
         seenPaths.add(editor.label);
       }
+    }
+
+    if (intent.needsWorkspace) {
+      pieces.push(...(await this.collector.symbolContext(prompt)));
     }
 
     // Tier 4 — explicit @mentions.

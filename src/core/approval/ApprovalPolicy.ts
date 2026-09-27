@@ -46,6 +46,14 @@ export class ApprovalPolicy {
       case 'get_definition':
       case 'get_references':
       case 'get_hover':
+      case 'find_definition':
+      case 'find_references':
+      case 'workspace_symbols':
+      case 'document_symbols':
+      case 'get_impact':
+      case 'git_status':
+      case 'git_diff':
+      case 'git_log':
       case 'open_file':
       case 'open_diff':
       case 'ask_user':
@@ -56,6 +64,8 @@ export class ApprovalPolicy {
       case 'apply_patch':
       case 'multi_apply_patch':
       case 'delete_file':
+      case 'git_commit':
+      case 'git_branch':
         return 'WRITE';
 
       case 'run_command':

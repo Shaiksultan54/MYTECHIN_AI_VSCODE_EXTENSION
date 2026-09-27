@@ -158,6 +158,7 @@ export class ToolPromptBuilder {
     const rules = [
       'Call a tool only when you need information you do not have, or when the user asked you to change something. A general programming question needs no tools.',
       'Search before reading. `search_code` narrows the repository; `read_file` then reads what matters.',
+      'For a specific named symbol, prefer `find_definition` and `find_references` to locate its definition and call sites; use `document_symbols` or `workspace_symbols` for symbol navigation. Use `search_code` for free-text searches. Before changing an exported or shared module, use `get_impact`.',
       'Read a file before editing it. Never edit a file whose current contents you have not seen in this conversation.',
       'Prefer `apply_patch` with find/replace blocks over `write_file`. The find text must appear exactly once and must match the file byte for byte, indentation included.',
       'One tool call per message. Wait for the result before deciding the next step.',

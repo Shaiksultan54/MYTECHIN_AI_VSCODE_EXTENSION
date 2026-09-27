@@ -32,6 +32,8 @@ export type ExtensionEvent =
   | { type: 'toolCompleted'; messageId: string; call: ToolCallView }
   | { type: 'toolApprovalRequired'; messageId: string; request: ApprovalRequestView }
   | { type: 'toolApprovalResolved'; requestId: string; approved: boolean }
+  | { type: 'planRequired'; plan: import('../types.js').PlanView }
+  | { type: 'planResolved'; planId: string }
   | { type: 'attachmentsUpdated'; attachments: ContextAttachment[] }
   | { type: 'contextUpdated'; summary: ContextSummaryView }
   | { type: 'checkpointsUpdated'; checkpoints: CheckpointView[] }

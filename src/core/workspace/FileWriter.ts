@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import { open as openFile } from 'node:fs/promises';
 import type { ResolvedPath, WorkspaceManager } from './WorkspaceManager.js';
 
 export interface WriteResult {
@@ -7,6 +8,24 @@ export interface WriteResult {
   created: boolean;
   bytesWritten: number;
   linesAfter: number;
+}
+
+export type AtomicWritePhase = 'create-directory' | 'write-temp' | 'flush-temp' | 'rename' | 'cleanup';
+
+export class AtomicWriteError extends Error {
+  constructor(
+    readonly targetPath: string,
+    readonly phase: AtomicWritePhase,
+    cause: unknown
+  ) {
+    super(
+      `Atomic write failed during ${phase} for ${targetPath}: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+    this.name = 'AtomicWriteError';
+    this.cause = cause;
+  }
 }
 
 /** All mutations funnel through here so checkpoints, atomic writes, and validation stay honest. */
@@ -39,39 +58,53 @@ export class FileWriter {
 
     if (!existed) {
       const dir = vscode.Uri.file(path.dirname(resolved.fsPath));
-      await vscode.workspace.fs.createDirectory(dir);
+      try {
+        await vscode.workspace.fs.createDirectory(dir);
+      } catch (error) {
+        throw new AtomicWriteError(resolved.relativePath, 'create-directory', error);
+      }
     }
 
     const buffer = Buffer.from(content, 'utf8');
-
-    // Keep an already-open editor in sync without reloading glitches.
-    const open = vscode.workspace.textDocuments.find(
-      (d) => d.uri.fsPath === resolved.uri.fsPath
+    const tempUri = vscode.Uri.file(
+      path.join(
+        path.dirname(resolved.fsPath),
+        `.${path.basename(resolved.fsPath)}.mytechin-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.tmp`
+      )
     );
+
+    try {
+      await vscode.workspace.fs.writeFile(tempUri, buffer);
+    } catch (error) {
+      await this.cleanupTemp(tempUri, resolved.fsPath, 'write-temp', error);
+    }
+
+    try {
+      await this.flushTemp(tempUri);
+    } catch (error) {
+      await this.cleanupTemp(tempUri, resolved.fsPath, 'flush-temp', error);
+    }
+
+    try {
+      await vscode.workspace.fs.rename(tempUri, resolved.uri, { overwrite: true });
+    } catch (error) {
+      await this.cleanupTemp(tempUri, resolved.fsPath, 'rename', error);
+    }
+
+    // Update an open editor only after the durable disk replacement succeeds.
+    const open = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === resolved.uri.fsPath);
     if (open) {
       const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(
-        open.positionAt(0),
-        open.positionAt(open.getText().length)
-      );
+      const fullRange = new vscode.Range(open.positionAt(0), open.positionAt(open.getText().length));
       edit.replace(resolved.uri, fullRange, content);
-      await vscode.workspace.applyEdit(edit);
-      await open.save().then(undefined, () => undefined);
-    } else {
-      // Atomic write via temp file + rename
-      const tempUri = vscode.Uri.file(
-        `${resolved.fsPath}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
-      );
-      try {
-        await vscode.workspace.fs.writeFile(tempUri, buffer);
-        await vscode.workspace.fs.rename(tempUri, resolved.uri, { overwrite: true });
-      } catch (err) {
-        try {
-          await vscode.workspace.fs.delete(tempUri, { useTrash: false });
-        } catch {
-          // ignore cleanup error
-        }
-        throw err;
+      if (!(await vscode.workspace.applyEdit(edit))) {
+        throw new AtomicWriteError(
+          resolved.relativePath,
+          'rename',
+          'The open editor could not be updated after the file was replaced.'
+        );
       }
     }
 
@@ -81,6 +114,36 @@ export class FileWriter {
       bytesWritten: buffer.byteLength,
       linesAfter: content.length === 0 ? 0 : content.split(/\r?\n/).length
     };
+  }
+
+  private async flushTemp(tempUri: vscode.Uri): Promise<void> {
+    if (tempUri.scheme !== 'file') return;
+    let handle: Awaited<ReturnType<typeof openFile>> | undefined;
+    try {
+      handle = await openFile(tempUri.fsPath, 'r');
+      await handle.sync();
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EINVAL' && code !== 'ENOSYS' && code !== 'ENOTSUP' && code !== 'EPERM') {
+        throw error;
+      }
+    } finally {
+      await handle?.close();
+    }
+  }
+
+  private async cleanupTemp(
+    tempUri: vscode.Uri,
+    targetPath: string,
+    phase: AtomicWritePhase,
+    cause: unknown
+  ): Promise<never> {
+    try {
+      await vscode.workspace.fs.delete(tempUri, { useTrash: false });
+    } catch (cleanupError) {
+      throw new AtomicWriteError(targetPath, 'cleanup', cleanupError);
+    }
+    throw new AtomicWriteError(targetPath, phase, cause);
   }
 
   canRollback(resolved: ResolvedPath): boolean {

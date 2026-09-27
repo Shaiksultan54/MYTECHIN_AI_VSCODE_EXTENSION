@@ -20,7 +20,7 @@ export interface CommandClassification {
 }
 
 const HARD_BLOCKED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /\b(rm|del|Remove-Item)\s+.*(-rf|-r\s+-f|\/s\s+\/q)\s+([\\\/]|\b[A-Za-z]:[\\\/]?$)/i, reason: 'Root/drive wipe attempt' },
+  { pattern: /\b(rm|del|Remove-Item)\s+.*(-rf|-r\s+-f|\/s\s+\/q)\s+([\\/]|\b[A-Za-z]:[\\/]?$)/i, reason: 'Root/drive wipe attempt' },
   { pattern: /\bmkfs\b|\bdd\s+if=/i, reason: 'Disk overwrite command' },
   { pattern: /\bformat\s+[A-Za-z]:/i, reason: 'Disk format command' },
   { pattern: /\b(shutdown|reboot)\b/i, reason: 'System restart/shutdown command' },
@@ -61,12 +61,105 @@ const SAFE_READ_ONLY_PREFIXES = [
   'which '
 ];
 
+interface TokenizedCommand {
+  tokens: string[];
+  operators: string[];
+  malformed: boolean;
+}
+
+function tokenize(command: string): TokenizedCommand {
+  const tokens: string[] = [];
+  const operators: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+
+  const flush = (): void => {
+    if (current.length > 0) {
+      tokens.push(current);
+      current = '';
+    }
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      flush();
+      continue;
+    }
+    if (';&|>'.includes(char)) {
+      flush();
+      const next = command[index + 1];
+      const operator = (char === '&' && next === '&') || (char === '|' && next === '|')
+        ? `${char}${next}`
+        : char;
+      operators.push(operator);
+      if (operator.length === 2) index += 1;
+      continue;
+    }
+    current += char;
+  }
+  if (escaped) current += '\\';
+  flush();
+  return { tokens, operators, malformed: quote !== undefined };
+}
+
+function blockedClassification(reason: string): CommandClassification {
+  return {
+    level: 'block',
+    category: 'EXECUTE',
+    reason: `Blocked by security policy: ${reason}`,
+    isDestructive: true,
+    requiresApproval: true
+  };
+}
+
 export class CommandPolicy {
   /**
    * Classifies an arbitrary shell command into allow, ask, or block.
+   * Dedicated Git tools do not call this classifier: their ToolRisk and
+   * Git-aware previews are enforced by the tool registry and approval policy.
    */
   static classify(command: string): CommandClassification {
     const trimmed = command.trim();
+    const parsed = tokenize(trimmed);
+
+    if (parsed.malformed) {
+      return blockedClassification('Unterminated shell quote.');
+    }
+
+    if (/\$\(|`/.test(trimmed)) {
+      return blockedClassification('Unresolved command substitution is not permitted.');
+    }
+
+    if (/(?:base64|xxd)\b[^|]*(?:\||\|\|)\s*(?:ba)?sh\b/i.test(trimmed)) {
+      return blockedClassification('Encoded payloads piped into a shell are not permitted.');
+    }
+
+    if (parsed.operators.length > 0 && parsed.tokens.length > 0) {
+      return blockedClassification('Chained shell commands require explicit review and cannot use a read-only allowlist.');
+    }
 
     // 1. Check hard blocked patterns
     for (const { pattern, reason } of HARD_BLOCKED_PATTERNS) {
@@ -95,10 +188,11 @@ export class CommandPolicy {
     }
 
     // 3. Check for Git operations
-    if (/^\s*git\s+/i.test(trimmed)) {
+    const firstCommand = parsed.tokens.join(' ');
+    if (parsed.tokens[0]?.toLowerCase() === 'git') {
       const isReadOnly =
-        /^\s*git\s+(status|diff|log|branch|show|remote|rev-parse|tag)\b/i.test(trimmed) &&
-        !/\b(-d|-D|--delete)\b/.test(trimmed);
+        /^(status|diff|log|branch|show|remote|rev-parse|tag)$/i.test(parsed.tokens[1] ?? '') &&
+        !parsed.tokens.some((token) => ['-d', '-D', '--delete'].includes(token));
 
       if (isReadOnly) {
         return {
@@ -142,12 +236,13 @@ export class CommandPolicy {
     }
 
     // 6. Check safe read-only commands (single commands or safe sequences)
-    const lower = trimmed.toLowerCase();
-    const isSafeRead = SAFE_READ_ONLY_PREFIXES.some(
-      (prefix) => lower === prefix || lower.startsWith(prefix + ' ')
-    );
+    const lower = firstCommand.toLowerCase();
+    const isSafeRead = SAFE_READ_ONLY_PREFIXES.some((prefix) => {
+      const normalizedPrefix = prefix.trim().toLowerCase();
+      return lower === normalizedPrefix || lower.startsWith(`${normalizedPrefix} `);
+    });
 
-    if (isSafeRead && !/[;&|>]/.test(trimmed)) {
+    if (isSafeRead) {
       return {
         level: 'allow',
         category: 'READ',

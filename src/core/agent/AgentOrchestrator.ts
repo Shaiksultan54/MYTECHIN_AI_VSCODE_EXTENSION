@@ -17,6 +17,7 @@ import { Logger } from '../logging/Logger.js';
 import type { AgentEventSink } from './AgentEvents.js';
 import { AgentState } from './AgentState.js';
 import { ToolCallParser } from './ToolCallParser.js';
+import type { VerificationLoop } from './VerificationLoop.js';
 
 export interface AgentOrchestratorDeps {
   provider: () => Promise<AIProvider>;
@@ -31,6 +32,8 @@ export interface AgentOrchestratorDeps {
   checkpoints: CheckpointManager;
   events: AgentEventSink;
   state: AgentState;
+  verification: VerificationLoop;
+  requestPlanApproval: (plan: import('../../shared/types.js').PlanView, token: vscode.CancellationToken) => Promise<string | undefined>;
 }
 
 /**
@@ -42,12 +45,25 @@ export interface AgentOrchestratorDeps {
 export class AgentOrchestrator {
   private readonly systemPrompt = new SystemPromptBuilder();
   private readonly taskPrompt = new TaskPromptBuilder();
+  private repairAttempts = 0;
 
   constructor(private readonly deps: AgentOrchestratorDeps) {}
 
   async run(userPrompt: string, token: vscode.CancellationToken): Promise<void> {
     const { conversations, events, state, settings } = this.deps;
     const config = settings.read();
+    this.repairAttempts = 0;
+
+    if (config.planBeforeExecute) {
+      const plan = { planId: randomUUID(), text: `Plan for this request:\n\n${userPrompt}` };
+      const approvedPlan = await this.deps.requestPlanApproval(plan, token);
+      if (!approvedPlan || token.isCancellationRequested) {
+        return;
+      }
+      // Keep the user's actual request as the task. The editable plan is
+      // execution guidance, not a replacement for the request.
+      userPrompt = `${userPrompt}\n\nApproved execution plan:\n${approvedPlan}`;
+    }
 
     state.setPhase('analyzing');
 
@@ -162,6 +178,16 @@ export class AgentOrchestrator {
           continue;
         }
 
+        if (['write_file', 'create_file', 'apply_patch', 'multi_apply_patch', 'delete_file'].includes(turn.call.name)) {
+          const paths = this.editPaths(turn.call.arguments);
+          for (const path of paths) {
+            const impact = await this.deps.context.preEditImpact(path);
+            if (impact) {
+              conversations.addModelTurn({ role: 'system', content: impact.body });
+            }
+          }
+        }
+
         const result = await this.runTool(
           assistantMessage,
           turn.call.name,
@@ -174,6 +200,19 @@ export class AgentOrchestrator {
           name: turn.call.name,
           content: AgentOrchestrator.renderToolResult(result)
         });
+
+        if (result.output && typeof result.output === 'object' && 'verification' in result.output) {
+          const verification = (result.output as { verification: import('./VerificationLoop.js').VerificationResult }).verification;
+          conversations.addModelTurn({
+            role: 'system',
+            content: this.verificationMessage(verification)
+          });
+          if (verification.repairRequired && this.repairAttempts >= 2) {
+            this.appendText(assistantMessage, `\n\nVerification stopped after ${this.repairAttempts} self-repair attempts.`);
+            break;
+          }
+
+        }
 
         // Re-prime the task section so the model keeps the goal in view.
         conversations.addModelTurn({
@@ -326,6 +365,13 @@ export class AgentOrchestrator {
     events.emit({ type: 'toolStarted', messageId: message.id, call: view });
     state.setPhase('running-tool', `Running ${name}`);
 
+    const shouldVerify =
+      this.deps.settings.read().verifyAfterEdit &&
+      /^(write_file|create_file|apply_patch|multi_apply_patch|delete_file)$/.test(name);
+    const modifiedFiles = AgentOrchestrator.touchedFiles(name, input);
+    const beforeDiagnostics = shouldVerify
+      ? await this.deps.verification.inspectDiagnostics(modifiedFiles)
+      : [];
     const execution = await this.deps.executor.execute(name, input, token, (preview, risk) => {
       view.title = preview.title === name ? view.title : preview.title;
       view.risk = risk;
@@ -333,6 +379,7 @@ export class AgentOrchestrator {
       if (risk !== 'safe') {
         state.setPhase('awaiting-approval');
       }
+
     });
 
     view.title = execution.title;
@@ -350,18 +397,97 @@ export class AgentOrchestrator {
     conversations.upsertToolCall(message.id, view);
     events.emit({ type: 'toolCompleted', messageId: message.id, call: view });
 
-    if (execution.result.success && /^(write_file|create_file|apply_patch|delete_file)$/.test(name)) {
+    if (execution.result.success && shouldVerify) {
       state.setPhase('verifying');
       conversations.noteTaskFact(execution.result.summary);
+      const files = AgentOrchestrator.modifiedFiles(execution.result.output);
+      if (files.length > 0) {
+        const verification = await this.deps.verification.verify(files, token, beforeDiagnostics);
+        execution.result.output = {
+          ...(execution.result.output && typeof execution.result.output === 'object'
+            ? execution.result.output
+            : {}),
+          verification
+        };
+        if (!verification.passed || verification.warningsCount > 0) {
+          if (verification.repairPrompt) {
+            execution.result.summary += ` Verification found ${verification.errorsCount} error${verification.errorsCount === 1 ? '' : 's'}.`;
+          } else if (verification.warningsCount > 0) {
+            execution.result.summary += ` Verification found ${verification.warningsCount} warning${verification.warningsCount === 1 ? '' : 's'}.`;
+          }
+        }
+      }
+
     }
 
     Logger.get().info(`Tool ${name} → ${view.status} (${execution.durationMs}ms)`);
     return execution.result;
   }
 
+  private verificationMessage(result: import('./VerificationLoop.js').VerificationResult): string {
+    if (result.repairRequired && this.repairAttempts < 2) {
+      this.repairAttempts += 1;
+      return `${result.repairPrompt}\nThis is self-repair attempt ${this.repairAttempts} of 2.`;
+    }
+
+    if (result.repairRequired) {
+      return `Verification still reports ${result.newErrorsCount} new error(s) after the repair limit. Stop editing and report the failure.`;
+    }
+    return result.selectedTests.length > 0
+      ? `Verification passed. A corresponding test file exists: ${result.selectedTests.join(', ')}. If useful, run only it with \`${result.testCommand} ${result.selectedTests[0]}\` using the normal run_command approval flow.`
+      : 'Verification passed: no new error diagnostics were found.';
+  }
+
+  private editPaths(input: Record<string, unknown>): string[] {
+    const paths: string[] = [];
+    if (typeof input.path === 'string') {
+      paths.push(input.path);
+    }
+    const entries = Array.isArray(input.files) ? input.files : input.changes;
+    if (Array.isArray(entries)) {
+      for (const file of entries) {
+        if (file && typeof file === 'object' && typeof (file as { path?: unknown }).path === 'string') {
+          paths.push((file as { path: string }).path);
+        }
+      }
+    }
+    return Array.from(new Set(paths));
+  }
+
   private appendText(message: ChatMessage, delta: string): void {
     message.text += delta;
     this.deps.events.emit({ type: 'assistantChunk', messageId: message.id, delta });
+  }
+
+  private static modifiedFiles(output: unknown): string[] {
+    if (!output || typeof output !== 'object') {
+      return [];
+    }
+
+    const value = output as { path?: unknown; files?: unknown };
+    if (typeof value.path === 'string') {
+      return [value.path];
+    }
+    if (Array.isArray(value.files)) {
+      return value.files.flatMap((file) => {
+        if (typeof file === 'string') return [file];
+        if (!file || typeof file !== 'object') return [];
+        const path = (file as { path?: unknown }).path;
+        return typeof path === 'string' ? [path] : [];
+      });
+    }
+    return [];
+  }
+
+  private static touchedFiles(name: string, input: Record<string, unknown>): string[] {
+    if (name === 'multi_apply_patch' && Array.isArray(input.changes)) {
+      return input.changes.flatMap((change) =>
+        change && typeof change === 'object' && typeof (change as { path?: unknown }).path === 'string'
+          ? [(change as { path: string }).path]
+          : []
+      );
+    }
+    return typeof input.path === 'string' ? [input.path] : [];
   }
 
   private reportError(message: ChatMessage, error: unknown): void {

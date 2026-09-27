@@ -9,6 +9,7 @@ import { toRelative } from '../workspace/PathSecurity.js';
 import { Logger } from '../logging/Logger.js';
 import type { AttachmentManager } from './AttachmentManager.js';
 import type { SemanticSearchService } from '../search/SemanticSearchService.js';
+import type { WorkspaceGraph } from '../workspace/WorkspaceGraph.js';
 import { estimateTokens } from './ContextBudget.js';
 import type { ContextPiece, Intent } from './ContextTypes.js';
 
@@ -28,7 +29,8 @@ export class ContextCollector {
     private readonly searcher: FileSearcher,
     private readonly scanner: WorkspaceScanner,
     private readonly attachments: AttachmentManager,
-    private readonly semanticSearch?: SemanticSearchService
+    private readonly semanticSearch?: SemanticSearchService,
+    private readonly graph?: WorkspaceGraph
   ) {}
 
   /** Tier 0: the lightweight workspace map. Always cheap, always included. */
@@ -210,6 +212,7 @@ export class ContextCollector {
     if (!editor || editor.document.uri.scheme !== 'file') {
       return undefined;
     }
+
     try {
       const resolved = this.workspace.resolveUri(editor.document.uri);
       const visible = editor.visibleRanges[0];
@@ -243,6 +246,80 @@ export class ContextCollector {
         reason: 'Open in your editor'
       };
     } catch {
+      return undefined;
+    }
+  }
+
+    /** Adds language-server navigation context when the request names the symbol at the cursor. */
+    async symbolContext(prompt: string): Promise<ContextPiece[]> {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.scheme !== 'file' || !/\b(symbol|function|method|class|calls?|references?|definition)\b/i.test(prompt)) {
+        return [];
+      }
+
+      const position = editor.selection.active;
+      const range = editor.document.getWordRangeAtPosition(position);
+      const symbol = range ? editor.document.getText(range) : '';
+      if (!symbol || !new RegExp(`\\b${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(prompt)) {
+        return [];
+      }
+      try {
+        const [definitions, references] = await Promise.all([
+          vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>('vscode.executeDefinitionProvider', editor.document.uri, position),
+          vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', editor.document.uri, position, { includeDeclaration: false })
+        ]);
+        const roots = this.workspace.rootPaths();
+        const formatLocation = (location: vscode.Location | vscode.LocationLink): string =>
+          'targetUri' in location
+            ? `${toRelative(roots, location.targetUri.fsPath)}:${location.targetRange.start.line + 1}`
+            : `${toRelative(roots, location.uri.fsPath)}:${location.range.start.line + 1}`;
+        const body = [
+          `Language-server results for symbol "${symbol}" at ${toRelative(roots, editor.document.uri.fsPath)}:${position.line + 1}:`,
+          definitions?.length ? `Definition: ${definitions.map(formatLocation).join(', ')}` : 'Definition: none found',
+          references?.length ? `References (${references.length}): ${references.slice(0, 40).map(formatLocation).join(', ')}` : 'References: none found'
+        ].join('\n');
+        return [{
+          id: randomUUID(),
+          source: 'symbol',
+          kind: 'workspace',
+          label: `Language server: ${symbol}`,
+          detail: `${definitions?.length ?? 0} definition(s), ${references?.length ?? 0} reference(s)`,
+          uri: editor.document.uri.toString(),
+          body,
+          tokens: estimateTokens(body),
+          reason: 'Specific symbol requested'
+        }];
+      } catch (error) {
+        Logger.get().debug(`Language-server context unavailable for ${symbol}`, error);
+        return [];
+      }
+    }
+
+  async impactContext(relativePath: string): Promise<ContextPiece | undefined> {
+    if (!this.graph) {
+      return undefined;
+    }
+    try {
+      const impact = await this.graph.impact(relativePath);
+      const format = (entry: { path: string; symbols: string[] }): string =>
+        `${entry.path}${entry.symbols.length ? ` [${entry.symbols.join(', ')}]` : ''}`;
+      const body = [
+        `Pre-edit dependency impact for ${impact.path} (best-effort static approximation):`,
+        `Files this file imports (${impact.dependencies.length}): ${impact.dependencies.map(format).join(', ') || 'none'}`,
+        `Files importing this file (${impact.dependents.length}): ${impact.dependents.map(format).join(', ') || 'none'}`
+      ].join('\n');
+      return {
+        id: randomUUID(),
+        source: 'symbol',
+        kind: 'workspace',
+        label: `Impact: ${impact.path}`,
+        detail: `${impact.dependents.length} dependents, ${impact.dependencies.length} dependencies`,
+        body,
+        tokens: estimateTokens(body),
+        reason: 'Pre-edit exported API impact'
+      };
+    } catch (error) {
+      Logger.get().debug(`Could not build impact context for ${relativePath}`, error);
       return undefined;
     }
   }

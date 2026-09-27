@@ -31,3 +31,4 @@ pnpm-debug.log*
 
 # Project specific
 media/codicons/
+.mytechin/

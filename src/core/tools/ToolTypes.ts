@@ -7,6 +7,7 @@ import type { FileSearcher } from '../workspace/FileSearcher.js';
 import type { TerminalManager } from '../terminal/TerminalManager.js';
 import type { CheckpointManager } from '../checkpoints/CheckpointManager.js';
 import type { DiffManager } from '../checkpoints/DiffManager.js';
+import type { WorkspaceGraph } from '../workspace/WorkspaceGraph.js';
 
 /** Structured result. Tools never return UI strings. */
 export interface ToolResult {
@@ -37,6 +38,7 @@ export interface ToolContext {
   terminal: TerminalManager;
   checkpoints: CheckpointManager;
   diffs: DiffManager;
+  graph: WorkspaceGraph;
   browser?: import('../browser/BrowserService.js').BrowserService;
   token: vscode.CancellationToken;
   conversationId: string;

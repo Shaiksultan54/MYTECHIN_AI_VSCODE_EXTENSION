@@ -166,6 +166,7 @@ export interface SettingsView {
   provider: ProviderId;
   model: string;
   ollamaEndpoint: string;
+  ollamaEmbeddingModel: string;
   openaiCompatibleBaseUrl: string;
   openaiCompatibleOrganization: string;
   puterBaseUrl: string;
@@ -184,6 +185,13 @@ export interface SettingsView {
   terminalTimeout: number;
   warnOnSensitiveUpload: boolean;
   mcpConfigPath?: string;
+  verifyAfterEdit: boolean;
+  planBeforeExecute: boolean;
+}
+
+export interface PlanView {
+  planId: string;
+  text: string;
 }
 
 export interface ConversationSummary {

@@ -65,7 +65,6 @@ export class SemanticSearchService implements vscode.Disposable {
    * Index a single file. Updates existing chunks if file changed.
    */
   async indexFile(uri: vscode.Uri): Promise<void> {
-    // @ts-ignore
     void this._reader;
     void this.workspace;
     try {

@@ -22,6 +22,8 @@ export interface VerificationResult {
   testOutput?: string;
   repairRequired: boolean;
   repairPrompt?: string;
+  newErrorsCount: number;
+  testCommand?: string;
 }
 
 /**
@@ -111,12 +113,16 @@ export class VerificationLoop {
    */
   async verify(
     modifiedFiles: string[],
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
+    before: FileDiagnostic[] = []
   ): Promise<VerificationResult> {
     const diagnostics = await this.inspectDiagnostics(modifiedFiles);
-    const errors = diagnostics.filter((d) => d.severity === 'error');
+    const beforeKeys = new Set(before.map(VerificationLoop.key));
+    const errors = diagnostics.filter((d) => d.severity === 'error' && !beforeKeys.has(VerificationLoop.key(d)));
     const warnings = diagnostics.filter((d) => d.severity === 'warning');
     const selectedTests = await this.selectTargetedTests(modifiedFiles);
+    const testCommand = selectedTests.length > 0 ? await this.detectTestCommand() : undefined;
+    const runnableTests = testCommand ? selectedTests : [];
 
     const hasErrors = errors.length > 0;
     let repairPrompt: string | undefined;
@@ -126,11 +132,11 @@ export class VerificationLoop {
         .map((e) => `- ${e.file}:${e.line}:${e.column} [${e.source ?? 'compiler'}]: ${e.message}`)
         .join('\n');
 
-      repairPrompt = `The recent file modifications introduced compilation/lint errors that must be resolved:\n${errorLines}\n\nPlease inspect the code at these locations and apply the necessary fixes.`;
+      repairPrompt = `The recent file modifications introduced ${errors.length} new compilation/lint error(s) that must be resolved:\n${errorLines}\n\nPlease inspect the code at these locations and apply the necessary fixes.`;
     }
 
     Logger.get().info(
-      `Verification complete: ${errors.length} errors, ${warnings.length} warnings, ${selectedTests.length} tests identified.`
+      `Verification complete: ${errors.length} errors, ${warnings.length} warnings, ${runnableTests.length} tests identified.`
     );
 
     return {
@@ -138,9 +144,37 @@ export class VerificationLoop {
       diagnostics,
       errorsCount: errors.length,
       warningsCount: warnings.length,
-      selectedTests,
+      selectedTests: runnableTests,
       repairRequired: hasErrors,
-      repairPrompt
+      repairPrompt,
+      newErrorsCount: errors.length,
+      testCommand
     };
+  }
+
+  private async detectTestCommand(): Promise<string | undefined> {
+    const root = this.workspace.rootPaths()[0];
+    if (!root) return undefined;
+    try {
+      const uri = vscode.Uri.file(path.join(root, 'package.json'));
+      const packageJson = JSON.parse(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8')) as {
+        scripts?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+        dependencies?: Record<string, string>;
+      };
+      const scripts = packageJson.scripts ?? {};
+      if (scripts.test) return 'npm test --';
+      const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      if (dependencies.vitest) return 'npx vitest run';
+      if (dependencies.jest) return 'npx jest';
+      if (dependencies.mocha) return 'npx mocha';
+    } catch {
+      // Non-JavaScript workspaces may not have package.json.
+    }
+    return undefined;
+  }
+
+  private static key(diagnostic: FileDiagnostic): string {
+    return `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.severity}:${diagnostic.source ?? ''}:${diagnostic.message}`;
   }
 }
