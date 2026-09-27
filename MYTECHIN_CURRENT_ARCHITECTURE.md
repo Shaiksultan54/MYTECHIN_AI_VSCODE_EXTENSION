@@ -1,14 +1,22 @@
 # Mytechin AI — Current Architecture
 
+<<<<<<< HEAD
 **Document version:** 3.0.0
 **Audit date:** 2026-09-27
 **Status:** Current implementation baseline
+=======
+**Document Version:** 1.0.0  
+**Audit Date:** 2026-09-21  
+**Scope:** Full codebase audit of `mytechin-ai-source` (VS Code extension + Webview UI)
+**Status:** Completed Baseline Audit  
+>>>>>>> f0f025f31c1687d36c396ffe6a5f6a802dea6520
 
 This document describes the architecture that exists in the repository today.
 The user-facing behavior is explained in [docs/FEATURE_GUIDE.md](docs/FEATURE_GUIDE.md).
 
 ## 1. System boundary
 
+<<<<<<< HEAD
 ```text
 VS Code extension host
   ├─ ExtensionController
@@ -23,6 +31,60 @@ React webview
   ├─ Context, history, memory, settings
   ├─ Approval, plan, diff, and error cards
   └─ VS Code theme-safe presentation
+=======
+The primary objective is to upgrade the existing **MYTECHIN AI** VS Code extension into a **model-independent, repository-aware software engineering agent platform**.
+
+Large software projects cannot be understood by sending entire codebases into model context windows. Instead, MYTECHIN must index, parse, relate, search, retrieve, contextualize, execute, diff, verify, and repair autonomously using targeted repository intelligence:
+
+$$\text{REPOSITORY} \longrightarrow \text{INDEX} \longrightarrow \text{STRUCTURE} \longrightarrow \text{SYMBOLS} \longrightarrow \text{RELATIONSHIPS} \longrightarrow \text{SEARCH} \longrightarrow \text{RETRIEVAL} \longrightarrow \text{CONTEXT ASSEMBLY} \longrightarrow \text{MODEL} \longrightarrow \text{TOOLS} \longrightarrow \text{PATCH} \longrightarrow \text{DIFF} \longrightarrow \text{APPROVAL} \longrightarrow \text{APPLY} \longrightarrow \text{BUILD} \longrightarrow \text{TEST} \longrightarrow \text{REVIEW} \longrightarrow \text{RESULT}$$
+
+This document records the exact state of every module in the existing repository prior to deep architectural expansion, highlighting strengths, vulnerabilities, gaps, and the precise migration path forward.
+
+---
+
+## 2. Existing Architecture & Directory Map
+
+The codebase is organized into a modular TypeScript architecture with a dual-project structure (VS Code Extension core + React Webview UI):
+
+```
+d:\zip\mytechin-ai-source\
+├── package.json                   # Extension manifest, contributes, settings, commands
+├── tsconfig.json                  # Extension TypeScript configuration (ES2022, Node16)
+├── esbuild.mjs                    # Production bundle builder (esbuild targeting Node)
+├── src\
+│   ├── extension.ts               # Extension activation & deactivation lifecycle
+│   ├── commands\
+│   │   └── registerCommands.ts    # 18 VS Code command handlers & context-menu actions
+│   ├── core\
+│   │   ├── agent\                 # Orchestration, state machine, runtime, tool parser
+│   │   ├── approval\              # Approval policies (alwaysAsk, askForRisky, etc.)
+│   │   ├── browser\               # Playwright headless browser tools
+│   │   ├── checkpoints\           # Local snapshot manager & virtual diff editor
+│   │   ├── context\               # Attachment, mention, editor & search context collector
+│   │   ├── controller\            # ExtensionController mediator (IPC hub between UI & core)
+│   │   ├── conversation\          # Multi-turn conversation manager & Memento storage
+│   │   ├── logging\               # OutputChannel logger with trace levels
+│   │   ├── mcp\                   # Model Context Protocol client & server adapter
+│   │   ├── memory\                # Project-level memory store (.mytechin/memory.json)
+│   │   ├── prompt\                # System & Task prompt builders
+│   │   ├── providers\             # Multi-vendor LLM provider implementations
+│   │   ├── search\                # Hybrid ranker, VectorStore, AST code chunker
+│   │   ├── storage\               # SecretStore (VS Code Secrets) & SettingsStore
+│   │   ├── terminal\              # Child process terminal manager with output capture
+│   │   ├── tools\                 # Tool registry, executor, schemas, and handlers
+│   │   ├── vision\                # Image attachment and data URL converter
+│   │   └── workspace\             # WorkspaceScanner, FileReader, FileWriter, PathSecurity
+│   ├── shared\                    # Shared DTOs, schemas, constants across UI and core
+│   └── test\                      # Vitest unit test suite
+└── webview-ui\                    # React 18 + Vite frontend for the VS Code sidebar
+    ├── package.json
+    ├── vite.config.ts
+    └── src\
+        ├── App.tsx                # Main UI state router
+        ├── components\            # Chat, Composer, DiffViewer, Approval, Memory, Settings
+        ├── state\                 # React context & reducers for UI state
+        └── styles.css             # Vanilla CSS design system
+>>>>>>> f0f025f31c1687d36c396ffe6a5f6a802dea6520
 ```
 
 The webview is untrusted presentation code. Filesystem, credentials, terminal
