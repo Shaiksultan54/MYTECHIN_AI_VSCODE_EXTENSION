@@ -244,8 +244,10 @@ export class ExtensionController implements vscode.Disposable {
   }
 
   async initialize(): Promise<void> {
-    await this.conversations.startNew();
-    await this.mcp.initialize();
+    await Promise.all([
+      this.conversations.startNew(),
+      this.mcp.initialize()
+    ]);
     void this.refreshWorkspace();
     void this.testConnection();
   }

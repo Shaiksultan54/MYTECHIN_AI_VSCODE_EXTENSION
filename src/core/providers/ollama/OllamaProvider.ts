@@ -1,12 +1,20 @@
 import { BaseProvider } from '../AIProvider.js';
 import { joinUrl, readLines, request } from '../http.js';
 import {
+  FillInMiddleUnsupportedError,
+  type FillInMiddleCapable,
+  type FillInMiddleRequest
+} from '../FillInMiddle.js';
+import {
   ProviderError,
   type AIRequest,
   type AIStreamEvent,
   type ModelInfo,
   type ProviderStatus
 } from '../ProviderTypes.js';
+
+/** `<tool name="x" id="y">{json}</tool>`; the id attribute is absent in transcripts saved before parallel calls. */
+const TOOL_BLOCK = /<tool\s+name=["']?([^"'>\s]+)["']?(?:\s+id=["']?([^"'>\s]+)["']?)?\s*>\n?([\s\S]*?)\n?<\/tool>/g;
 
 interface OllamaTag {
   name: string;
@@ -26,14 +34,18 @@ interface OllamaChunk {
   error?: string;
 }
 
+const FIM_MODELS = /coder|codellama|codegemma|codestral|starcoder|stable-code|granite-code|codeqwen/i;
+const NO_INSERT = /does not support insert|support.*suffix/i;
+
 /** Local Ollama server. The default provider: nothing leaves the machine. */
-export class OllamaProvider extends BaseProvider {
+export class OllamaProvider extends BaseProvider implements FillInMiddleCapable {
   readonly id = 'ollama';
   readonly name = 'Ollama';
   readonly isCloud = false;
   readonly requiresSecret = false;
 
   private toolCapable = false;
+  private readonly noInsert = new Set<string>();
 
   private get endpoint(): string {
     return this.config.endpoint?.trim() || 'http://127.0.0.1:11434';
@@ -84,6 +96,65 @@ export class OllamaProvider extends BaseProvider {
     return true;
   }
 
+  supportsFillInMiddle(model: string): boolean {
+    return FIM_MODELS.test(model) && !this.noInsert.has(model);
+  }
+
+  async fillInMiddle(req: FillInMiddleRequest, onText: (delta: string) => void): Promise<void> {
+    if (!req.model) {
+      throw new ProviderError('not-configured', 'No Ollama model selected.', 'Pick a model in the sidebar.');
+    }
+    const unsupported = (): FillInMiddleUnsupportedError => {
+      this.noInsert.add(req.model);
+      return new FillInMiddleUnsupportedError(req.model);
+    };
+
+    let response: Response;
+    try {
+      response = await request(joinUrl(this.endpoint, '/api/generate'), {
+        method: 'POST',
+        body: {
+          model: req.model,
+          prompt: req.prefix,
+          suffix: req.suffix,
+          stream: true,
+          options: { temperature: req.temperature ?? 0.1, num_predict: req.maxTokens ?? 128 }
+        },
+        signal: req.signal,
+        timeoutMs: 0x7fffffff,
+        retries: 0
+      });
+    } catch (error) {
+      if (error instanceof ProviderError && NO_INSERT.test(`${error.message} ${error.hint ?? ''}`)) {
+        throw unsupported();
+      }
+      throw error;
+    }
+
+    for await (const line of readLines(response, req.signal)) {
+      if (!line.trim()) continue;
+      let chunk: { response?: string; done?: boolean; error?: string };
+      try {
+        chunk = JSON.parse(line) as typeof chunk;
+      } catch {
+        continue;
+      }
+      if (chunk.error) {
+        if (NO_INSERT.test(chunk.error)) throw unsupported();
+        if (/not found|no such model/i.test(chunk.error)) {
+          throw new ProviderError(
+            'model-not-found',
+            `Ollama does not have the model "${req.model}".`,
+            `Run "ollama pull ${req.model}" or pick a different model.`
+          );
+        }
+        throw new ProviderError('bad-response', chunk.error);
+      }
+      if (chunk.response) onText(chunk.response);
+      if (chunk.done) break;
+    }
+  }
+
   async stream(req: AIRequest, onEvent: (event: AIStreamEvent) => void): Promise<void> {
     if (!req.model) {
       throw new ProviderError('not-configured', 'No Ollama model selected.', 'Pick a model in the sidebar.');
@@ -111,19 +182,26 @@ export class OllamaProvider extends BaseProvider {
       }
 
       if (m.role === 'assistant' && this.toolCapable) {
-        const match = /<tool\s+name=["']?([^"'>]+)["']?>\n([\s\S]*?)\n<\/tool>/.exec(contentString);
-        if (match) {
-          const text = contentString.slice(0, match.index).trim();
-          let args = {};
+        // Several tool blocks can share one assistant turn (parallel calls).
+        // Ollama pairs results with calls by order, and results are recorded
+        // in the order the calls were made.
+        const calls: Array<{ function: { name: string; arguments: Record<string, unknown> } }> = [];
+        let firstIndex = -1;
+        for (const match of contentString.matchAll(TOOL_BLOCK)) {
+          if (firstIndex === -1) firstIndex = match.index ?? 0;
+          let args: Record<string, unknown> = {};
           try {
-            args = JSON.parse(match[2] || '{}');
+            args = JSON.parse(match[3] || '{}');
           } catch {
-            args = { _raw: match[2] };
+            args = { _raw: match[3] };
           }
+          calls.push({ function: { name: match[1], arguments: args } });
+        }
+        if (calls.length > 0) {
           messages.push({
             role: 'assistant',
-            content: text,
-            tool_calls: [{ function: { name: match[1], arguments: args } }]
+            content: contentString.slice(0, firstIndex).trim(),
+            tool_calls: calls
           });
           continue;
         }

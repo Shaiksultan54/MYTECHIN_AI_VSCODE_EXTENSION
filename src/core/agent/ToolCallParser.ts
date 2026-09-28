@@ -135,7 +135,7 @@ export class ToolCallParser {
   }
 
   private parseBlock(raw: string): ParsedToolCall | undefined {
-    const header = /^<tool\s+name\s*=\s*["']?([A-Za-z0-9_]+)["']?\s*>/.exec(raw);
+    const header = /^<tool\s+name\s*=\s*["']?([A-Za-z0-9_]+)["']?(?:\s+[^>]*)?>/.exec(raw);
     if (!header) {
       return undefined;
     }

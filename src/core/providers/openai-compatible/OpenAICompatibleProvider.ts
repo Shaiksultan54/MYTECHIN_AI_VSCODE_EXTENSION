@@ -8,6 +8,9 @@ import {
   type ProviderStatus
 } from '../ProviderTypes.js';
 
+/** `<tool name="x" id="y">{json}</tool>`; the id attribute is absent in transcripts saved before parallel calls. */
+const TOOL_BLOCK = /<tool\s+name=["']?([^"'>\s]+)["']?(?:\s+id=["']?([^"'>\s]+)["']?)?\s*>\s*([\s\S]*?)\s*<\/tool>/g;
+
 interface ChatChunk {
   choices?: {
     delta?: {
@@ -108,27 +111,33 @@ export class OpenAICompatibleProvider extends BaseProvider {
       throw new ProviderError('not-configured', `No ${this.name} model selected.`, 'Pick a model in the sidebar.');
     }
 
+    // A turn may carry several tool blocks (parallel calls), each with its own
+    // id. Transcripts saved before ids existed fall back to the most recently
+    // assigned id, which is right when there was one call per turn.
     let lastToolCallId = 'tool';
     const messages = [
       ...(req.system ? [{ role: 'system', content: req.system }] : []),
       ...req.messages.map((m) => {
         if (m.role === 'tool') {
-          return { role: 'tool', content: m.content, tool_call_id: lastToolCallId, name: m.name };
+          return { role: 'tool', content: m.content, tool_call_id: m.toolCallId ?? lastToolCallId, name: m.name };
         }
         if (m.role === 'assistant' && typeof m.content === 'string') {
-          const match = m.content.match(/<tool name="([^"]+)">\s*([\s\S]*?)\s*<\/tool>/);
-          if (match) {
-            const name = match[1];
-            const args = match[2];
-            const textContent = m.content.replace(match[0], '').trim();
-            lastToolCallId = `call_${Math.random().toString(36).slice(2)}`;
+          const calls: Array<{ id: string; name: string; args: string }> = [];
+          let firstIndex = -1;
+          for (const match of m.content.matchAll(TOOL_BLOCK)) {
+            if (firstIndex === -1) firstIndex = match.index ?? 0;
+            lastToolCallId = match[2] ?? `call_${Math.random().toString(36).slice(2)}`;
+            calls.push({ id: lastToolCallId, name: match[1], args: match[3] });
+          }
+          if (calls.length > 0) {
+            const textContent = m.content.slice(0, firstIndex).trim();
             const assistantMsg: any = {
               role: 'assistant',
-              tool_calls: [{
-                id: lastToolCallId,
+              tool_calls: calls.map((c) => ({
+                id: c.id,
                 type: 'function',
-                function: { name, arguments: args }
-              }]
+                function: { name: c.name, arguments: c.args }
+              }))
             };
             if (textContent) {
               assistantMsg.content = textContent;

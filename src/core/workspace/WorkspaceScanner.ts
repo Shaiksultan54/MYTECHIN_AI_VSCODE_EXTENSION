@@ -50,10 +50,13 @@ export class WorkspaceScanner {
     const roots = this.workspace.rootPaths();
 
     const markerGlob = `**/{${PROJECT_MARKERS.join(',')}}`;
-    const markers = await vscode.workspace.findFiles(markerGlob, exclude, 200);
-    for (const glob of MARKER_GLOBS) {
-      markers.push(...(await vscode.workspace.findFiles(glob, exclude, 60)));
-    }
+    const markerUris = await Promise.all([
+      vscode.workspace.findFiles(markerGlob, exclude, 200),
+      ...MARKER_GLOBS.map((glob) => vscode.workspace.findFiles(glob, exclude, 60))
+    ]);
+    const markers = Array.from(
+      new Map(markerUris.flat().map((uri) => [uri.toString(), uri])).values()
+    );
 
     const languages = new Set<string>();
     const frameworks = new Set<string>();

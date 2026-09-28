@@ -4,6 +4,7 @@ import { Logger } from './core/logging/Logger.js';
 import { ExtensionController } from './core/controller/ExtensionController.js';
 import { WebviewProvider } from './webview/WebviewProvider.js';
 import { registerCommands } from './commands/registerCommands.js';
+import { registerInlineCompletion } from './core/completion/InlineCompletionProvider.js';
 
 let controller: ExtensionController | undefined;
 
@@ -28,6 +29,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand('mytechin.internal.attachUris', async (uris: vscode.Uri[]) => {
       await controller?.addUris(uris);
+    })
+  );
+
+  context.subscriptions.push(
+    ...registerInlineCompletion({
+      provider: () => controller!.providers.active(),
+      defaultModel: () => controller!.settings.read().model
     })
   );
 

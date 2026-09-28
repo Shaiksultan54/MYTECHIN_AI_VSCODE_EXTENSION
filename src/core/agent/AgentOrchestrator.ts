@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { ChatMessage, ToolCallView } from '../../shared/types.js';
 import { MAX_TOOL_OUTPUT_CHARS_IN_UI } from '../../shared/constants/index.js';
 import type { AIProvider } from '../providers/AIProvider.js';
-import { ProviderError, type AIMessage, type AIStreamEvent } from '../providers/ProviderTypes.js';
+import { ProviderError, type AIMessage, type AIStreamEvent, type AIToolCall } from '../providers/ProviderTypes.js';
 import type { ToolExecutor } from '../tools/ToolExecutor.js';
 import type { ToolRegistry } from '../tools/ToolRegistry.js';
 import type { ConversationManager } from '../conversation/ConversationManager.js';
@@ -18,6 +18,11 @@ import type { AgentEventSink } from './AgentEvents.js';
 import { AgentState } from './AgentState.js';
 import { ToolCallParser } from './ToolCallParser.js';
 import type { VerificationLoop } from './VerificationLoop.js';
+
+/** A tool call the model asked for, whichever transport surfaced it. */
+export interface PendingToolCall extends AIToolCall {
+  parseError?: string;
+}
 
 export interface AgentOrchestratorDeps {
   provider: () => Promise<AIProvider>;
@@ -140,78 +145,133 @@ export class AgentOrchestrator {
           break;
         }
 
-        if (!turn.call) {
+        if (turn.calls.length === 0) {
           // No tool requested: the model has answered.
           conversations.addModelTurn({ role: 'assistant', content: turn.text });
           break;
         }
 
-        iteration = state.countIteration();
-        if (iteration > maxIterations) {
+        // A native tool-calling model can ask for several independent calls
+        // in one response (e.g. "read these three files"). Spend the
+        // iteration budget across the whole batch up front, so a big batch
+        // near the limit is trimmed rather than starting work it can't finish.
+        const batch: PendingToolCall[] = [];
+        for (const requested of turn.calls) {
+          iteration = state.countIteration();
+          if (iteration > maxIterations) {
+            break;
+          }
+          batch.push(requested);
+        }
+
+        if (batch.length === 0) {
           const note = `Stopped after ${maxIterations} tool calls. Ask me to continue if there is more to do.`;
           this.appendText(assistantMessage, `\n\n${note}`);
           conversations.addModelTurn({ role: 'assistant', content: note });
           break;
         }
 
+        // One assistant turn carries every tool call the model asked for,
+        // each tagged with its own id so results can be paired back up even
+        // when several ran out of order.
         conversations.addModelTurn({
           role: 'assistant',
-          content: `${turn.text}\n<tool name="${turn.call.name}">\n${JSON.stringify(turn.call.arguments)}\n</tool>`
+          content:
+            turn.text +
+            batch
+              .map((c) => `\n<tool name="${c.name}" id="${c.id}">\n${JSON.stringify(c.arguments)}\n</tool>`)
+              .join('')
         });
 
-        if (turn.call.parseError) {
-          conversations.addModelTurn({
-            role: 'tool',
-            name: turn.call.name,
-            content: turn.call.parseError
-          });
-          continue;
-        }
+        // Parse errors and repeats are rejected without running anything;
+        // everything else is scheduled below. Pre-edit impact previews run
+        // here, in call order, exactly as they did for a single call.
+        const outcomes: Array<{ call: PendingToolCall; content: string } | undefined> = new Array(batch.length);
+        const runnable: Array<{ index: number; call: PendingToolCall }> = [];
 
-        if (state.isRepeat(turn.call.name, turn.call.arguments)) {
-          conversations.addModelTurn({
-            role: 'tool',
-            name: turn.call.name,
-            content:
-              'You already ran this exact tool call in this task and got a result. Use that result, or try something different. Do not repeat it again.'
-          });
-          continue;
-        }
-
-        if (['write_file', 'create_file', 'apply_patch', 'multi_apply_patch', 'delete_file'].includes(turn.call.name)) {
-          const paths = this.editPaths(turn.call.arguments);
-          for (const path of paths) {
-            const impact = await this.deps.context.preEditImpact(path);
-            if (impact) {
-              conversations.addModelTurn({ role: 'system', content: impact.body });
+        for (let i = 0; i < batch.length; i++) {
+          const call = batch[i];
+          if (call.parseError) {
+            outcomes[i] = { call, content: call.parseError };
+            continue;
+          }
+          if (state.isRepeat(call.name, call.arguments)) {
+            outcomes[i] = {
+              call,
+              content:
+                'You already ran this exact tool call in this task and got a result. Use that result, or try something different. Do not repeat it again.'
+            };
+            continue;
+          }
+          if (['write_file', 'create_file', 'apply_patch', 'multi_apply_patch', 'delete_file'].includes(call.name)) {
+            const paths = this.editPaths(call.arguments);
+            for (const path of paths) {
+              const impact = await this.deps.context.preEditImpact(path);
+              if (impact) {
+                conversations.addModelTurn({ role: 'system', content: impact.body });
+              }
             }
           }
+          runnable.push({ index: i, call });
         }
 
-        const result = await this.runTool(
-          assistantMessage,
-          turn.call.name,
-          turn.call.arguments,
-          token
+        // Independent, read-only calls run concurrently. Anything that
+        // mutates the workspace or might need approval still runs one at a
+        // time, in order â€” approval prompts never overlap and file edits
+        // never race, exactly like the single-call loop did before.
+        const safeToolsRunConcurrently =
+          config.approvalMode === 'autonomous' ||
+          (config.approvalMode !== 'alwaysAsk' && config.autoApproveSafeTools);
+
+        const parallel = runnable.filter(
+          ({ call }) => safeToolsRunConcurrently && this.deps.registry.get(call.name)?.risk === 'safe'
         );
+        const sequential = runnable.filter((entry) => !parallel.includes(entry));
 
-        conversations.addModelTurn({
-          role: 'tool',
-          name: turn.call.name,
-          content: AgentOrchestrator.renderToolResult(result)
-        });
+        let verificationBreak = false;
 
-        if (result.output && typeof result.output === 'object' && 'verification' in result.output) {
-          const verification = (result.output as { verification: import('./VerificationLoop.js').VerificationResult }).verification;
-          conversations.addModelTurn({
-            role: 'system',
-            content: this.verificationMessage(verification)
-          });
-          if (verification.repairRequired && this.repairAttempts >= 2) {
-            this.appendText(assistantMessage, `\n\nVerification stopped after ${this.repairAttempts} self-repair attempts.`);
-            break;
+        const runOne = async ({ index, call }: { index: number; call: PendingToolCall }): Promise<void> => {
+          const result = await this.runTool(assistantMessage, call.name, call.arguments, token);
+          outcomes[index] = { call, content: AgentOrchestrator.renderToolResult(result) };
+
+          if (result.output && typeof result.output === 'object' && 'verification' in result.output) {
+            const verification = (
+              result.output as { verification: import('./VerificationLoop.js').VerificationResult }
+            ).verification;
+            conversations.addModelTurn({ role: 'system', content: this.verificationMessage(verification) });
+            if (verification.repairRequired && this.repairAttempts >= 2) {
+              this.appendText(
+                assistantMessage,
+                `\n\nVerification stopped after ${this.repairAttempts} self-repair attempts.`
+              );
+              verificationBreak = true;
+            }
           }
+        };
 
+        if (parallel.length > 0) {
+          state.setPhase('running-tool', parallel.length > 1 ? `Running ${parallel.length} tools` : undefined);
+          await Promise.all(parallel.map(runOne));
+        }
+        for (const entry of sequential) {
+          await runOne(entry);
+        }
+
+        // Record every result in the order the model asked for them,
+        // regardless of which finished first, so the transcript â€” and the
+        // next request built from it â€” reads the way the model expects.
+        for (const outcome of outcomes) {
+          if (!outcome) continue;
+          conversations.addModelTurn({
+            role: 'tool',
+            name: outcome.call.name,
+            toolCallId: outcome.call.id,
+            content: outcome.content
+          });
+        }
+
+        if (verificationBreak) {
+          break;
         }
 
         // Re-prime the task section so the model keeps the goal in view.
@@ -247,21 +307,25 @@ export class AgentOrchestrator {
     }
   }
 
-  /** One model turn. Returns the text plus a tool call if one was requested. */
+  /** One model turn. Returns the text plus every tool call the model asked for (0, 1, or many). */
   private async streamOnce(
     provider: AIProvider,
     system: string,
     message: ChatMessage,
     token: vscode.CancellationToken,
     config: ReturnType<SettingsStore['read']>
-  ): Promise<{ text: string; call?: ReturnType<ToolCallParser['push']>['call']; aborted: boolean }> {
+  ): Promise<{ text: string; calls: PendingToolCall[]; aborted: boolean }> {
     const controller = new AbortController();
     const cancellation = token.onCancellationRequested(() => controller.abort());
 
     const parser = new ToolCallParser();
     let visibleText = '';
     let call: ReturnType<ToolCallParser['push']>['call'];
-    let nativeCall: { name: string; arguments: Record<string, unknown> } | undefined;
+    // Native tool-calling providers can emit several tool_call events for one
+    // response (a model asking for independent calls together). The
+    // text-based `<tool>` convention above can only ever produce one, since
+    // the stream is aborted the moment it is found.
+    const nativeCalls: AIToolCall[] = [];
 
     const messages: AIMessage[] = this.deps.conversations.modelTurns.map((turn) => ({
       role: turn.role,
@@ -289,9 +353,7 @@ export class AgentOrchestrator {
           break;
         }
         case 'tool_call':
-          if (!nativeCall) {
-            nativeCall = { name: event.call.name, arguments: event.call.arguments };
-          }
+          nativeCalls.push(event.call);
           break;
         case 'reasoning':
           // Private reasoning is never shown. Only the phase label updates.
@@ -332,13 +394,16 @@ export class AgentOrchestrator {
       call = flushed.call;
     }
 
-    if (!call && nativeCall) {
-      call = { name: nativeCall.name, arguments: nativeCall.arguments, raw: '' };
-    }
+    // The text-based block, if present, wins â€” it already aborted the stream
+    // the instant it was found, so nativeCalls (if any arrived before that)
+    // would be an incomplete, meaningless partial batch.
+    const calls: PendingToolCall[] = call
+      ? [{ id: randomUUID(), name: call.name, arguments: call.arguments, parseError: call.parseError }]
+      : nativeCalls;
 
     return {
       text: visibleText,
-      call,
+      calls,
       aborted: token.isCancellationRequested
     };
   }

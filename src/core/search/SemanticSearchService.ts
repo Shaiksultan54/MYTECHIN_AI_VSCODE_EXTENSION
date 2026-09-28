@@ -64,7 +64,7 @@ export class SemanticSearchService implements vscode.Disposable {
   /**
    * Index a single file. Updates existing chunks if file changed.
    */
-  async indexFile(uri: vscode.Uri): Promise<void> {
+  async indexFile(uri: vscode.Uri, persist = true): Promise<void> {
     void this._reader;
     void this.workspace;
     try {
@@ -100,7 +100,9 @@ export class SemanticSearchService implements vscode.Disposable {
             hash: toEmbed[i].hash
           }, vectors[i]);
         }
-        await this.store.save();
+        if (persist) {
+          await this.store.save();
+        }
       }
     } catch (e) {
       this.logger.error(`SemanticSearchService: Failed to index ${uri.fsPath}`, e);
@@ -130,10 +132,11 @@ export class SemanticSearchService implements vscode.Disposable {
       // Index in small batches to prevent blocking UI
       for (let i = 0; i < uris.length; i += 5) {
         const batch = uris.slice(i, i + 5);
-        await Promise.all(batch.map(uri => this.indexFile(uri)));
+        await Promise.all(batch.map(uri => this.indexFile(uri, false)));
         // Yield to event loop
         await new Promise(resolve => setTimeout(resolve, 50));
       }
+      await this.store.save();
       this.logger.info('SemanticSearchService', 'Finished workspace index.');
     } finally {
       this.isIndexing = false;

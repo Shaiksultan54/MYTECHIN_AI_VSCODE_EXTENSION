@@ -6,10 +6,78 @@ export interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /**
+   * Extra attempts after the first, for retryable failures only (429, 5xx,
+   * timeouts, connection errors). 0 disables retries. Defaults to 2, so a
+   * transient failure gets up to 3 attempts total before the caller sees it.
+   * Retries happen only while establishing the response (status line and
+   * headers) â€” once a body starts streaming to the caller, this function has
+   * already returned and nothing here retries it, so partial output is never
+   * duplicated.
+   */
+  retries?: number;
+  /** Called before each retry sleep, with the attempt number (1-based) and the delay in ms. Useful for status UI/logging. */
+  onRetry?: (attempt: number, delayMs: number, error: ProviderError) => void;
 }
 
-/** `fetch` with a timeout, cancellation and provider-shaped errors. */
+const DEFAULT_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 400;
+const RETRY_MAX_DELAY_MS = 4000;
+
+/** `fetch` with a timeout, cancellation, provider-shaped errors, and bounded retry-with-backoff on transient failures. */
 export async function request(url: string, options: RequestOptions = {}): Promise<Response> {
+  const maxRetries = Math.max(0, options.retries ?? DEFAULT_RETRIES);
+
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await attemptRequest(url, options);
+    } catch (error) {
+      const canRetry =
+        attempt < maxRetries &&
+        error instanceof ProviderError &&
+        error.retryable &&
+        !options.signal?.aborted;
+      if (!canRetry) {
+        throw error;
+      }
+      const delayMs = backoffDelay(attempt);
+      options.onRetry?.(attempt + 1, delayMs, error as ProviderError);
+      await sleep(delayMs, options.signal);
+      attempt++;
+    }
+  }
+}
+
+function backoffDelay(attempt: number): number {
+  const exponential = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * 2 ** attempt);
+  // Full jitter: spreads out concurrent retries instead of a thundering herd.
+  return Math.round(exponential * (0.5 + Math.random() * 0.5));
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new ProviderError('aborted', 'Request cancelled.'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new ProviderError('aborted', 'Request cancelled.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/** A single fetch attempt: timeout, cancellation and provider-shaped errors, no retry. */
+async function attemptRequest(url: string, options: RequestOptions): Promise<Response> {
+  if (options.signal?.aborted) {
+    throw new ProviderError('aborted', 'Request cancelled.');
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120_000);
 

@@ -52,6 +52,11 @@
     },
     "commands": [
       {
+        "command": "mytechin.toggleInlineCompletion",
+        "title": "Toggle Inline Completions",
+        "category": "Mytechin AI"
+      },
+      {
         "command": "mytechin.open",
         "title": "Open",
         "category": "Mytechin AI"
@@ -401,6 +406,57 @@
           "type": "boolean",
           "default": true,
           "description": "Snapshot files before the agent changes them so you can restore."
+        },
+        "mytechin.inlineCompletion.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show Copilot-style ghost-text completions as you type. **Off by default:** while on, code around your cursor is sent to the configured provider on each pause. Use a local provider (Ollama) to keep it on your machine. Credential files such as `.env` are never sent."
+        },
+        "mytechin.inlineCompletion.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Model used for inline completions. Leave empty to use the chat model. A small, fast model (for example a local `qwen2.5-coder`) is usually a better fit than a large one."
+        },
+        "mytechin.inlineCompletion.fillInMiddle": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Use native fill-in-the-middle when the model supports it. Other models automatically use the chat prompt."
+        },
+        "mytechin.inlineCompletion.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "How long to wait after you stop typing before requesting a completion."
+        },
+        "mytechin.inlineCompletion.maxTokens": {
+          "type": "number",
+          "default": 128,
+          "minimum": 16,
+          "description": "Maximum length of a single completion, in tokens."
+        },
+        "mytechin.inlineCompletion.maxLines": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "description": "Maximum number of lines shown in one completion."
+        },
+        "mytechin.inlineCompletion.maxPrefixChars": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 200,
+          "description": "How much code before the cursor is sent as context."
+        },
+        "mytechin.inlineCompletion.maxSuffixChars": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 0,
+          "description": "How much code after the cursor is sent as context."
+        },
+        "mytechin.inlineCompletion.disabledLanguages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["plaintext", "scminput"],
+          "description": "Language ids for which inline completions are never requested."
         },
         "mytechin.verifyAfterEdit": {
           "type": "boolean",
