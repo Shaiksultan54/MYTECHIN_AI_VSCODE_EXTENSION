@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import type { AgentPhase } from '../../shared/types.js';
+import type {
+  AgentPhase,
+  ApprovalRequestView,
+  ChatMessage,
+  ToolCallView
+} from '../../shared/types.js';
+import type { ToolResult } from '../tools/ToolTypes.js';
 
 const PHASE_LABEL: Record<AgentPhase, string> = {
   idle: '',
@@ -27,6 +33,29 @@ const PHASE_LABEL: Record<AgentPhase, string> = {
 export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+export interface AgentDiagnostic {
+  file: string;
+  line?: number;
+  column?: number;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+}
+
+export interface AgentTestResult {
+  name: string;
+  status: 'passed' | 'failed' | 'skipped';
+  durationMs?: number;
+}
+
+export interface AgentBuildResult {
+  command: string;
+  status: 'passed' | 'failed' | 'skipped';
+  output?: string;
+  durationMs?: number;
 }
 
 export interface AgentStateData {
@@ -37,20 +66,20 @@ export interface AgentStateData {
   userRequest: string;
   plan?: string;
   currentStep?: string;
-  messages: any[];
-  toolCalls: any[];
-  toolResults: any[];
+  messages: ChatMessage[];
+  toolCalls: ToolCallView[];
+  toolResults: ToolResult[];
   changedFiles: string[];
-  diagnostics: any[];
-  tests: any[];
-  buildResults: any[];
+  diagnostics: AgentDiagnostic[];
+  tests: AgentTestResult[];
+  buildResults: AgentBuildResult[];
   retries: number;
   tokenUsage: TokenUsage;
   estimatedCost: number;
   selectedModel: string;
   provider: string;
   errors: string[];
-  approvals: any[];
+  approvals: ApprovalRequestView[];
   createdAt: number;
   updatedAt: number;
 }
@@ -88,7 +117,7 @@ export class AgentState {
       tests: [],
       buildResults: [],
       retries: 0,
-      tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      tokenUsage: { promptTokens: 0, completionTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       estimatedCost: 0,
       selectedModel: '',
       provider: '',
@@ -145,10 +174,11 @@ export class AgentState {
     this.onPhase(phase, label ?? PHASE_LABEL[phase] ?? phase);
   }
 
-  addTokenUsage(prompt: number, completion: number, cost: number = 0): void {
-    this.data.tokenUsage.promptTokens += prompt;
-    this.data.tokenUsage.completionTokens += completion;
-    this.data.estimatedCost += cost;
+  addTokenUsage(usage: { prompt: number; completion: number; cacheRead?: number; cacheWrite?: number }): void {
+    this.data.tokenUsage.promptTokens += usage.prompt;
+    this.data.tokenUsage.completionTokens += usage.completion;
+    this.data.tokenUsage.cacheReadTokens += usage.cacheRead ?? 0;
+    this.data.tokenUsage.cacheWriteTokens += usage.cacheWrite ?? 0;
     this.data.updatedAt = Date.now();
   }
 

@@ -31,7 +31,7 @@ export class SettingsStore {
       openaiCompatibleBaseUrl: c.get<string>('openaiCompatible.baseUrl', ''),
       openaiCompatibleOrganization: c.get<string>('openaiCompatible.organization', ''),
       puterBaseUrl: c.get<string>('puter.baseUrl', 'https://api.puter.com'),
-      omniRouteBaseUrl: c.get<string>('omniroute.baseUrl', 'http://127.0.0.1:8000/v1'),
+      omniRouteBaseUrl: c.get<string>('omniroute.baseUrl', 'http://127.0.0.1:20128/v1'),
       approvalMode: c.get<ApprovalMode>('approvalMode', 'askForRisky'),
       autoApproveSafeTools: c.get<boolean>('autoApproveSafeTools', true),
       maxToolIterations: c.get<number>('maxToolIterations', 24),

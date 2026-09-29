@@ -1,4 +1,4 @@
 {
-  "mytechin.provider": "omniroute",
-  "mytechin.model": "omniroute/auto"
+  "mytechin.provider": "gemini",
+  "mytechin.model": "models/gemini-pro-latest"
 }

@@ -48,7 +48,13 @@ export type AIStreamEvent =
   | { type: 'text'; delta: string }
   | { type: 'reasoning'; delta: string }
   | { type: 'tool_call'; call: AIToolCall }
-  | { type: 'usage'; promptTokens?: number; completionTokens?: number }
+  | {
+      type: 'usage';
+      promptTokens?: number;
+      completionTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+    }
   | { type: 'done'; finishReason: AIResponse['finishReason'] };
 
 export interface ProviderStatus {

@@ -18,47 +18,47 @@ export class OmniRouteProvider extends OpenAICompatibleProvider {
   override readonly name = 'OmniRoute';
   override readonly requiresSecret = false;
 
-  protected override defaultBaseUrl = 'http://127.0.0.1:8000/v1';
+  protected override defaultBaseUrl = 'http://127.0.0.1:20128/v1';
 
   override readonly isCloud: boolean = false;
 
   override async listModels(): Promise<ModelInfo[]> {
-    try {
-      const response = await request(joinUrl(this.baseUrl, '/models'), {
-        headers: this.headers(),
-        timeoutMs: 8000
-      });
-      const data = (await response.json()) as { data?: Array<{ id: string; name?: string }> };
-      const list = data.data ?? [];
+    const response = await request(`${joinUrl(this.baseUrl, '/models')}?prefix=alias`, {
+      headers: this.headers(),
+      timeoutMs: 8000
+    });
+    const data = (await response.json()) as {
+      data?: Array<{
+        id: string;
+        name?: string;
+        type?: string;
+        supports_tools?: boolean;
+        supports_vision?: boolean;
+        context_window?: number;
+      }>;
+    };
+    const list = data.data ?? [];
 
-      if (list.length === 0) {
-        // Default virtual routed models if endpoint doesn't return custom list
-        return [
-          { id: 'omniroute/auto', name: 'OmniRoute Auto (Optimal Routing)', supportsTools: true },
-          { id: 'omniroute/free-first', name: 'OmniRoute Free-First', supportsTools: true },
-          { id: 'omniroute/coder', name: 'OmniRoute Coding Specialist', supportsTools: true },
-          { id: 'omniroute/fast', name: 'OmniRoute Low Latency', supportsTools: true }
-        ];
-      }
-
-      return list.map((m) => ({
+    return list
+      .filter((m) => !m.type || !['embedding', 'image', 'video', 'audio', 'rerank', 'moderation'].includes(m.type))
+      .map((m) => ({
         id: m.id,
         name: m.name ?? m.id,
-        supportsTools: true
+        supportsTools: m.supports_tools ?? true,
+        supportsVision: m.supports_vision,
+        contextWindow: m.context_window
       }));
-    } catch {
-      // Fallback list when offline/local gateway is launching
-      return [
-        { id: 'omniroute/auto', name: 'OmniRoute Auto (Optimal Routing)', supportsTools: true },
-        { id: 'omniroute/free-first', name: 'OmniRoute Free-First', supportsTools: true },
-        { id: 'omniroute/coder', name: 'OmniRoute Coding Specialist', supportsTools: true }
-      ];
-    }
   }
 
   override async testConnection(): Promise<ProviderStatus> {
     try {
       const models = await this.listModels();
+      if (models.length === 0) {
+        return {
+          state: 'error',
+          message: `OmniRoute gateway at ${this.baseUrl} is reachable but returned no models.`
+        };
+      }
       return {
         state: 'connected',
         message: `OmniRoute gateway active (${models.length} routes available)`

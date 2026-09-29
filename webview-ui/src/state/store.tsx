@@ -22,6 +22,7 @@ import type {
   ModelInfo,
   ProviderStatusView,
   SettingsView,
+  TokenUsageView,
   WorkspaceSummary,
   MemoryEntry
 } from '../../../src/shared/types.js';
@@ -53,6 +54,7 @@ export interface AppState {
   prefill: { text: string; at: number } | undefined;
   mcpServers: McpServerStatusView[];
   memory: MemoryEntry[];
+  usage: TokenUsageView;
 }
 
 const initialState: AppState = {
@@ -78,7 +80,8 @@ const initialState: AppState = {
   mentions: { requestId: '', items: [] },
   prefill: undefined,
   mcpServers: [],
-  memory: []
+  memory: [],
+  usage: { promptTokens: 0, completionTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
 };
 
 export type Action =
@@ -140,7 +143,8 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
         checkpoints: event.state.checkpoints,
         phase: event.state.phase,
         mcpServers: event.state.mcpServers,
-        memory: event.state.memory
+        memory: event.state.memory,
+        usage: event.state.usage
       };
 
     case 'settingsUpdated':
@@ -263,6 +267,9 @@ function applyEvent(state: AppState, event: ExtensionEvent): AppState {
 
     case 'memoryUpdated':
       return { ...state, memory: event.memory };
+
+    case 'usageUpdated':
+      return { ...state, usage: event.usage };
 
     default:
       return state;

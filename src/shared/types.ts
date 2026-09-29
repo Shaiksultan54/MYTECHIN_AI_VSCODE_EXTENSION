@@ -149,6 +149,13 @@ export type ProviderId = 'ollama' | 'puter' | 'openai' | 'anthropic' | 'openai-c
 
 export type ProviderState = 'connected' | 'not-configured' | 'error' | 'checking';
 
+export interface TokenUsageView {
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
 export interface ProviderStatusView {
   id: ProviderId;
   name: string;

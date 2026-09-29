@@ -305,7 +305,8 @@
             "gemini",
             "groq",
             "openrouter",
-            "github"
+            "github",
+            "omniroute"
           ],
           "default": "ollama",
           "description": "Active AI provider."
@@ -339,6 +340,11 @@
           "type": "string",
           "default": "https://api.puter.com",
           "description": "Base URL of the Puter API."
+        },
+        "mytechin.omniroute.baseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:20128/v1",
+          "description": "Local OmniRoute OpenAI-compatible API base URL. OmniRoute normally runs at http://127.0.0.1:20128 and exposes its API under /v1."
         },
         "mytechin.approvalMode": {
           "type": "string",

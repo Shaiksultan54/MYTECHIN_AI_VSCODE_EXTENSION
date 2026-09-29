@@ -746,7 +746,8 @@ export class ExtensionController implements vscode.Disposable {
       checkpoints: this.checkpoints.forConversation(this.conversations.id),
       phase: this.agent.phase,
       mcpServers: this.mcp.getStatusesView(),
-      memory: this.memoryService.getEntries()
+      memory: this.memoryService.getEntries(),
+      usage: this.agent.usage
     };
     this.emit({ type: 'hydrate', state });
     void this.refreshWorkspace();

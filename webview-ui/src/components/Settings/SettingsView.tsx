@@ -92,6 +92,28 @@ function TextField(props: {
 
 export function SettingsView({ settings, providers, mcpServers }: SettingsViewProps): JSX.Element {
   const active = providers.find((provider) => provider.id === settings.provider);
+  const [mcpDraftOpen, setMcpDraftOpen] = useState(false);
+  const [mcpId, setMcpId] = useState('');
+  const [mcpCommand, setMcpCommand] = useState('');
+  const [mcpArgs, setMcpArgs] = useState('');
+
+  const addMcpServer = (): void => {
+    const id = mcpId.trim();
+    const command = mcpCommand.trim();
+    if (!id || !command) return;
+    post({
+      type: 'addMcpServer',
+      config: {
+        id,
+        command,
+        args: mcpArgs.trim() ? mcpArgs.trim().split(/\s+/) : undefined
+      }
+    });
+    setMcpId('');
+    setMcpCommand('');
+    setMcpArgs('');
+    setMcpDraftOpen(false);
+  };
 
   return (
     <div className="panel">
@@ -197,11 +219,25 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
         </section>
       ) : null}
 
+      {settings.provider === 'omniroute' ? (
+        <section className="settings-section">
+          <h4>OmniRoute local gateway</h4>
+          <TextField
+            label="API base URL"
+            value={settings.omniRouteBaseUrl ?? 'http://127.0.0.1:20128/v1'}
+            placeholder="http://127.0.0.1:20128/v1"
+            hint="Run OmniRoute locally, then use model auto or a discovered route. API keys are optional unless REQUIRE_API_KEY is enabled."
+            onCommit={(value) => post({ type: 'saveSettings', patch: { omniRouteBaseUrl: value } })}
+          />
+          <div className="provider-local-note"><Icon name="home" /> Local gateway. Requests go to the configured loopback endpoint.</div>
+        </section>
+      ) : null}
+
       {settings.provider === 'puter' ? (
         <section className="settings-section">
           <h4>Puter</h4>
           <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
-            <strong>🆓 Free to use!</strong> Puter auto-creates a free session automatically — no API key needed.
+            <strong>Free to use.</strong> Puter auto-creates a free session automatically — no API key needed.
             Just select a model below and start chatting. For a persistent account, sign up at{' '}
             <a href="https://puter.com" style={{ color: 'var(--vscode-textLink-foreground)' }}>puter.com</a>{' '}
             and add your token with the "Add credential" button above.
@@ -220,7 +256,7 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
         <section className="settings-section">
           <h4>Google Gemini (Google AI Studio)</h4>
           <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
-            <strong>🆓 Generous Free Tier!</strong> Get a free API key for Gemini Flash and Pro models at{' '}
+            <strong>Generous free tier.</strong> Get a free API key for Gemini Flash and Pro models at{' '}
             <a href="https://aistudio.google.com/app/apikey" style={{ color: 'var(--vscode-textLink-foreground)' }}>Google AI Studio</a>.
             Add your token using the "Add credential" button above.
           </p>
@@ -231,7 +267,7 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
         <section className="settings-section">
           <h4>Groq</h4>
           <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
-            <strong>⚡ Ultra-fast Inference!</strong> Groq offers high-speed inference for open-weights models like Llama 3 and Mixtral. Get your free API key at{' '}
+            <strong>Ultra-fast inference.</strong> Groq offers high-speed inference for open-weights models like Llama 3 and Mixtral. Get your free API key at{' '}
             <a href="https://console.groq.com/" style={{ color: 'var(--vscode-textLink-foreground)' }}>Groq Console</a>.
           </p>
         </section>
@@ -241,7 +277,7 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
         <section className="settings-section">
           <h4>OpenRouter</h4>
           <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
-            <strong>🔄 Multi-Model Router!</strong> Access dozens of free variants and premium models instantly. Automatically filters for tool calling and vision. Get your key at{' '}
+            <strong>Multi-model router.</strong> Access dozens of free variants and premium models instantly. Automatically filters for tool calling and vision. Get your key at{' '}
             <a href="https://openrouter.ai/" style={{ color: 'var(--vscode-textLink-foreground)' }}>OpenRouter</a>.
           </p>
         </section>
@@ -251,7 +287,7 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
         <section className="settings-section">
           <h4>GitHub Models</h4>
           <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
-            <strong>🛠️ Developer Friendly!</strong> Use your GitHub account to access popular models in the GitHub ecosystem for free. Find out more at{' '}
+            <strong>Developer-friendly.</strong> Use your GitHub account to access popular models in the GitHub ecosystem for free. Find out more at{' '}
             <a href="https://github.com/marketplace/models" style={{ color: 'var(--vscode-textLink-foreground)' }}>GitHub Models</a>.
           </p>
         </section>
@@ -263,17 +299,26 @@ export function SettingsView({ settings, providers, mcpServers }: SettingsViewPr
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              // Normally this would open a dialog or command palette, let's keep it simple for now
-              post({ type: 'addMcpServer', config: { id: `mcp-${Date.now()}`, command: 'npx', args: ['-y', '@modelcontextprotocol/server-everything'] } });
-            }}
+            onClick={() => setMcpDraftOpen((open) => !open)}
           >
-            Add
+            <Icon name="add" /> {mcpDraftOpen ? 'Cancel' : 'Add server'}
           </button>
         </div>
         <p className="field-hint" style={{ marginTop: 0, lineHeight: 1.6 }}>
           Model Context Protocol servers provide additional tools and context.
         </p>
+
+        {mcpDraftOpen ? (
+          <div className="mcp-draft" role="form" aria-label="Add MCP server">
+            <TextField label="Server id" value={mcpId} placeholder="filesystem" onCommit={setMcpId} />
+            <TextField label="Command" value={mcpCommand} placeholder="npx" onCommit={setMcpCommand} />
+            <TextField label="Arguments" value={mcpArgs} placeholder="-y @modelcontextprotocol/server-filesystem" hint="Arguments are split on whitespace. Secrets should be configured outside this form." onCommit={setMcpArgs} />
+            <div className="button-row">
+              <button type="button" className="button-primary" disabled={!mcpId.trim() || !mcpCommand.trim()} onClick={addMcpServer}><Icon name="check" /> Add server</button>
+              <button type="button" className="button-secondary" onClick={() => setMcpDraftOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : null}
         
         {mcpServers.length === 0 ? (
           <div className="field-hint">No MCP servers configured.</div>

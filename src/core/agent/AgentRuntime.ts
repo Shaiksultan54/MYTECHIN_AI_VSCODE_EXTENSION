@@ -115,6 +115,10 @@ export class AgentRuntime implements vscode.Disposable {
     return this.state.currentPhase;
   }
 
+  get usage(): import('../../shared/types.js').TokenUsageView {
+    return { ...this.state.data.tokenUsage };
+  }
+
   /** Cancellation token of the current task, for tools started outside the loop. */
   get token(): vscode.CancellationToken {
     return this.state.token;

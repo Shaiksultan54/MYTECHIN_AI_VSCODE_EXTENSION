@@ -117,11 +117,23 @@ const reads: Call[] = [
   { id: 'id-q', name: 'search_code', arguments: { query: 'foo' } }
 ];
 
+const manyReads: Call[] = Array.from({ length: 9 }, (_, index) => ({
+  id: `id-${index}`,
+  name: 'read_file',
+  arguments: { path: `${index}.ts` }
+}));
+
 describe('AgentOrchestrator parallel tool calls', () => {
   it('runs independent read-only calls concurrently', async () => {
     const { log } = await harness({ calls: reads });
     expect(log.maxActive).toBe(3);
     expect(log.started).toHaveLength(3);
+  });
+
+  it('bounds a large read-only batch to four concurrent tools', async () => {
+    const { log } = await harness({ calls: manyReads, delays: Object.fromEntries(manyReads.map((call) => [`read_file:${String(call.arguments.path)}`, 40])) });
+    expect(log.maxActive).toBe(4);
+    expect(log.started).toHaveLength(9);
   });
 
   it('runs a write alone, after the reads, never alongside them', async () => {

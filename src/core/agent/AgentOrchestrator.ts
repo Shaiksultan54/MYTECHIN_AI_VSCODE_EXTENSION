@@ -48,6 +48,7 @@ export interface AgentOrchestratorDeps {
  * calls and provider errors all terminate cleanly.
  */
 export class AgentOrchestrator {
+  private static readonly MAX_SAFE_TOOL_CONCURRENCY = 4;
   private readonly systemPrompt = new SystemPromptBuilder();
   private readonly taskPrompt = new TaskPromptBuilder();
   private repairAttempts = 0;
@@ -251,7 +252,7 @@ export class AgentOrchestrator {
 
         if (parallel.length > 0) {
           state.setPhase('running-tool', parallel.length > 1 ? `Running ${parallel.length} tools` : undefined);
-          await Promise.all(parallel.map(runOne));
+          await this.runBounded(parallel, runOne, AgentOrchestrator.MAX_SAFE_TOOL_CONCURRENCY);
         }
         for (const entry of sequential) {
           await runOne(entry);
@@ -326,6 +327,7 @@ export class AgentOrchestrator {
     // text-based `<tool>` convention above can only ever produce one, since
     // the stream is aborted the moment it is found.
     const nativeCalls: AIToolCall[] = [];
+    const usage = { prompt: 0, completion: 0, cacheRead: 0, cacheWrite: 0 };
 
     const messages: AIMessage[] = this.deps.conversations.modelTurns.map((turn) => ({
       role: turn.role,
@@ -355,6 +357,12 @@ export class AgentOrchestrator {
         case 'tool_call':
           nativeCalls.push(event.call);
           break;
+        case 'usage':
+          usage.prompt += event.promptTokens ?? 0;
+          usage.completion += event.completionTokens ?? 0;
+          usage.cacheRead += event.cacheReadTokens ?? 0;
+          usage.cacheWrite += event.cacheWriteTokens ?? 0;
+          break;
         case 'reasoning':
           // Private reasoning is never shown. Only the phase label updates.
           this.deps.state.setPhase('waiting-for-model', 'Thinking');
@@ -383,6 +391,11 @@ export class AgentOrchestrator {
       }
     } finally {
       cancellation.dispose();
+    }
+
+    if (usage.prompt || usage.completion || usage.cacheRead || usage.cacheWrite) {
+      this.deps.state.addTokenUsage(usage);
+      this.deps.events.emit({ type: 'usageUpdated', usage: { ...this.deps.state.data.tokenUsage } });
     }
 
     if (!call) {
@@ -517,6 +530,27 @@ export class AgentOrchestrator {
       }
     }
     return Array.from(new Set(paths));
+  }
+
+  /**
+   * Keeps read-only workspace work bounded. A model can request a large batch,
+   * but the extension must not create an unbounded number of filesystem or
+   * search operations at once.
+   */
+  private async runBounded<T>(
+    items: T[],
+    worker: (item: T) => Promise<void>,
+    limit: number
+  ): Promise<void> {
+    let next = 0;
+    const runWorker = async (): Promise<void> => {
+      while (next < items.length) {
+        const item = items[next++];
+        await worker(item);
+      }
+    };
+    const workers = Array.from({ length: Math.min(Math.max(1, limit), items.length) }, () => runWorker());
+    await Promise.all(workers);
   }
 
   private appendText(message: ChatMessage, delta: string): void {

@@ -12,6 +12,7 @@ import type {
   ProviderStatusView,
   SettingsView,
   ToolCallView,
+  TokenUsageView,
   WorkspaceSummary
 } from '../types.js';
 
@@ -44,7 +45,8 @@ export type ExtensionEvent =
   | { type: 'focusComposer'; prefill?: string }
   | { type: 'showPanel'; panel: 'chat' | 'settings' | 'history' | 'context' | 'memory' }
   | { type: 'mcpServersUpdated'; servers: McpServerStatusView[] }
-  | { type: 'memoryUpdated'; memory: import('../types.js').MemoryEntry[] };
+  | { type: 'memoryUpdated'; memory: import('../types.js').MemoryEntry[] }
+  | { type: 'usageUpdated'; usage: TokenUsageView };
 
 export interface HydrateState {
   settings: SettingsView;
@@ -60,4 +62,5 @@ export interface HydrateState {
   phase: AgentPhase;
   mcpServers: McpServerStatusView[];
   memory: import('../types.js').MemoryEntry[];
+  usage: TokenUsageView;
 }

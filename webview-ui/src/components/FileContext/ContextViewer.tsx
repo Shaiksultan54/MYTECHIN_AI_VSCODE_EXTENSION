@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { ContextItemView, ContextSummaryView } from '../../../../src/shared/types.js';
+import type { ContextItemView, ContextSummaryView, TokenUsageView } from '../../../../src/shared/types.js';
 import { post } from '../../vscode.js';
 import { Icon } from '../Icon.js';
 
@@ -31,10 +31,18 @@ const TITLES: Record<ContextItemView['kind'], string> = {
 };
 
 /** Answers "what did the model actually see?" — the trust surface of the agent. */
-export function ContextViewer({ summary }: { summary: ContextSummaryView | undefined }): JSX.Element {
+export function ContextViewer({
+  summary,
+  usage
+}: {
+  summary: ContextSummaryView | undefined;
+  usage: TokenUsageView;
+}): JSX.Element {
+  const usageActive = usage.promptTokens > 0 || usage.completionTokens > 0;
   if (!summary) {
     return (
       <div className="panel">
+        {usageActive ? <UsageSummary usage={usage} /> : null}
         <p className="empty-hint">Send a message first. Context is gathered per request.</p>
       </div>
     );
@@ -44,6 +52,7 @@ export function ContextViewer({ summary }: { summary: ContextSummaryView | undef
 
   return (
     <div className="panel">
+      {usageActive ? <UsageSummary usage={usage} /> : null}
       <p className="panel-lead">Context used for the last request</p>
 
       <div className="budget">
@@ -83,5 +92,21 @@ export function ContextViewer({ summary }: { summary: ContextSummaryView | undef
         );
       })}
     </div>
+  );
+}
+
+function UsageSummary({ usage }: { usage: TokenUsageView }): JSX.Element {
+  const cacheable = usage.cacheReadTokens + usage.cacheWriteTokens;
+  const hitRate = cacheable > 0 ? Math.round((usage.cacheReadTokens / cacheable) * 100) : undefined;
+  return (
+    <section className="usage-summary" aria-label="Session token usage">
+      <div className="usage-heading"><Icon name="pulse" /> Session usage</div>
+      <div className="usage-stats">
+        <span><strong>{usage.promptTokens.toLocaleString()}</strong> in</span>
+        <span><strong>{usage.completionTokens.toLocaleString()}</strong> out</span>
+        {hitRate !== undefined ? <span className="usage-cache"><strong>{hitRate}%</strong> cached</span> : null}
+      </div>
+      <span className="usage-caption">Cumulative totals across this session</span>
+    </section>
   );
 }

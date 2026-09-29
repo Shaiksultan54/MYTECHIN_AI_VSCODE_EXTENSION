@@ -69,8 +69,8 @@ export abstract class BaseProvider implements AIProvider {
           toolCalls.push(event.call);
           break;
         case 'usage':
-          usage.promptTokens = event.promptTokens;
-          usage.completionTokens = event.completionTokens;
+          usage.promptTokens = event.promptTokens ?? usage.promptTokens;
+          usage.completionTokens = event.completionTokens ?? usage.completionTokens;
           break;
         case 'done':
           finishReason = event.finishReason;

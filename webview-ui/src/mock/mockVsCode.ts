@@ -71,7 +71,8 @@ let mockState: HydrateState = {
   memory: [
     { id: 'm-1', content: 'Local Ollama is default provider, Puter for free cloud fallbacks', category: 'architecture' },
     { id: 'm-2', content: 'Use TypeScript strict mode and ES modules across all components', category: 'decisions' }
-  ]
+  ],
+  usage: { promptTokens: 18200, completionTokens: 2400, cacheReadTokens: 15600, cacheWriteTokens: 2100 }
 };
 
 function dispatchEvent(event: ExtensionEvent): void {

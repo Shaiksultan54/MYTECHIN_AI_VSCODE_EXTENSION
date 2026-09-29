@@ -16,8 +16,10 @@ backend, no account.
   itself rather than waiting for you to paste files in.
 - **Edits code with your approval.** Every change is shown as a diff before it
   is written, and every write is snapshotted so you can roll it back.
+- **Provides inline ghost-text code completions.** Autocomplete code in real time as you type, powered by local or cloud models.
 - **Runs commands when you say so.** Build, test, lint — with the command line
   shown to you first.
+- **Extensible with MCP & Memory.** Supports Model Context Protocol (MCP) servers and workspace memory persistence.
 - **Works with any language.** C#/.NET, Angular, React, Node, TypeScript,
   JavaScript, Python, SQL, Java, Go, Rust, PHP, and mixed repositories.
 
@@ -78,6 +80,10 @@ credential exists.
 | Ollama | No | Local. The default. |
 | OpenAI | Yes | `api.openai.com/v1`. |
 | Anthropic | Yes | `api.anthropic.com/v1/messages`. |
+| Gemini | Yes | Google Gemini API. |
+| Groq | Yes | Ultra-fast inference API. |
+| OpenRouter | Yes | Router access to hundreds of models. |
+| GitHub | Yes | GitHub Models API. |
 | OpenAI-compatible | Usually | Set your own base URL, including `/v1`. Works with LM Studio, llama.cpp server, vLLM, Groq, Together, OpenRouter and similar. |
 | Puter | Optional | Free cloud models. See below. |
 
@@ -224,11 +230,13 @@ All settings live under `mytechin.*` in VS Code settings. The most useful ones:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `ollama` | Active provider |
+| `provider` | `ollama` | Active provider (`ollama`, `puter`, `openai`, `anthropic`, `openai-compatible`, `gemini`, `groq`, `openrouter`, `github`) |
 | `model` | *(empty)* | Model id for that provider |
 | `ollama.endpoint` | `http://127.0.0.1:11434` | Local Ollama server |
 | `ollama.embeddingModel` | `nomic-embed-text` | Local model used for semantic-search embeddings |
 | `approvalMode` | `askForRisky` | See the table above |
+| `inlineCompletion.enabled` | `false` | Enable Copilot-style ghost-text completion in editor |
+| `inlineCompletion.model` | *(empty)* | Dedicated model for completions (defaults to active chat model) |
 | `maxToolIterations` | `24` | Tool calls per task before the agent stops |
 | `maxContextTokens` | `32000` | Approximate budget for everything sent |
 | `maxFileReadBytes` | `262144` | Largest slice of one file per read |
@@ -239,7 +247,7 @@ All settings live under `mytechin.*` in VS Code settings. The most useful ones:
 | `enableWorkspaceIndex` | `true` | Maintain workspace metadata and dependency intelligence |
 | `verifyAfterEdit` | `true` | Compare diagnostics after successful edits |
 | `planBeforeExecute` | `false` | Require an editable plan before the agent starts |
-| `mcpConfigPath` | `.mytechin/mcp.json` | MCP server configuration path |
+| `mcpConfigPath` | `.mytechin/mcp.json` | Model Context Protocol (MCP) configuration path |
 
 ## Known limitations
 

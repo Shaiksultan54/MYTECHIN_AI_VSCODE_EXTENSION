@@ -1,7 +1,7 @@
 import type { WebviewMessage } from '../../src/shared/messages/index.js';
 
 interface VsCodeApi {
-  postMessage(message: unknown): void;
+  postMessage(message: WebviewMessage): void;
   getState(): unknown;
   setState(state: unknown): void;
 }
